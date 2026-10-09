@@ -9,6 +9,7 @@ IMAGE="fish-game:custom"
 PUBLIC_PORT="3215"
 CONTAINER_PORT="5157"
 PUBLIC_URL="https://game.yucoder.cn"
+OAUTH_CONFIG="$PROJECT_DIR/apps/web/config.local.json"
 
 echo "[1/5] 拉取代码"
 if [ ! -d "$PROJECT_DIR/.git" ]; then
@@ -34,6 +35,12 @@ if [ "$PUBLIC_URL" = "https://your-domain.example.com" ]; then
 fi
 
 mkdir -p "$PROJECT_DIR/data"
+if [ ! -f "$OAUTH_CONFIG" ] || [ ! -r "$OAUTH_CONFIG" ]; then
+  echo "OAuth2 配置文件不存在或不可读：$OAUTH_CONFIG"
+  echo "请先配置该文件，再执行部署；原有容器未受影响。"
+  exit 1
+fi
+
 ENV_ARGS=()
 if [ -f "$PROJECT_DIR/.env.production" ]; then
   ENV_ARGS=(--env-file "$PROJECT_DIR/.env.production")
@@ -59,6 +66,8 @@ docker run -d \
   -e PORT="$CONTAINER_PORT" \
   -e HOST=0.0.0.0 \
   -e LOBBY_STORAGE_FILE=/data/lobby.json \
+  -e PARTI_OAUTH2_CONFIG=/app/apps/web/config.local.json \
+  --mount "type=bind,source=$OAUTH_CONFIG,target=/app/apps/web/config.local.json,readonly" \
   -v "$PROJECT_DIR/data:/data" \
   "$IMAGE"
 
