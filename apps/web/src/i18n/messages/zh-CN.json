@@ -115,7 +115,7 @@
   "lobby": {
     "hero": {
       "title": "在线大厅",
-      "description": "发现正在进行的房间，或者创建一个属于你们的欢乐现场。",
+      "description": "把片刻还给自己，把快乐留给彼此。",
       "createRoom": "创建联机房间",
       "joinPlaceholder": "粘贴房间邀请链接",
       "joinSubmitAria": "进入房间",

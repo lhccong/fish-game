@@ -20,8 +20,7 @@ cd "$PROJECT_DIR"
 git rev-parse --is-inside-work-tree >/dev/null
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "存在未提交的代码修改，请先处理后再部署。"
-  exit 1
+  echo "警告：存在未提交的代码修改，继续使用远端 main 更新。"
 fi
 
 git fetch origin "$BRANCH"

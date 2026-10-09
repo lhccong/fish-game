@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
-import { CloudIcon, PlusIcon, SparklesIcon, WifiIcon, WifiOffIcon } from 'lucide-react';
-import {
-  subscribeLanRooms,
-  type LanDiscoveredRoom,
-  type LanDiscoveryStatus,
-} from '@parti/transport-lan';
+import { CloudIcon, PlusIcon, RefreshCwIcon, SparklesIcon, UsersIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,94 +15,85 @@ import {
 import { buildJoinHashRoute, navigateToPeerJoin } from '../lib/peerRoutes';
 import { loadLocalUser } from '../lib/localUser';
 import { ENABLE_REPLAYS } from '../lib/featureFlags';
-import {
-  getLanDiscoveryConfig,
-  TRANSPORT_PROFILES_CHANGED_EVENT,
-  type TransportConfig,
-} from '../lib/transportConfig';
 
 /** 面向玩家的在线大厅。创作草稿与开发预览不在这里展示。 */
 export function Lobby() {
   const intl = useIntl();
   const [online, setOnline] = useState<LobbyRoom[]>([]);
   const [onlineStatus, setOnlineStatus] = useState<'loading' | 'ready' | 'offline'>('loading');
-  const [lanRooms, setLanRooms] = useState<LanDiscoveredRoom[]>([]);
-  const [lanStatus, setLanStatus] = useState<LanDiscoveryStatus>('connecting');
-  const [lanConfig, setLanConfig] = useState(() => getLanDiscoveryConfig());
-  const lanServerUrl = lanConfig.serverUrl;
-
-  useEffect(() => {
-    const refreshConfig = () => setLanConfig(getLanDiscoveryConfig());
-    window.addEventListener(TRANSPORT_PROFILES_CHANGED_EVENT, refreshConfig);
-    window.addEventListener('storage', refreshConfig);
-    return () => {
-      window.removeEventListener(TRANSPORT_PROFILES_CHANGED_EVENT, refreshConfig);
-      window.removeEventListener('storage', refreshConfig);
-    };
-  }, []);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const baseUrl = lobbyServiceUrl();
     if (!baseUrl) {
       setOnlineStatus('offline');
+      setRefreshing(false);
       return;
     }
     const client = new LobbyClient(baseUrl);
     const viewerClientId = loadLocalUser().id;
+    let active = true;
+    let pending = false;
     const refresh = () => {
+      if (pending) return;
+      pending = true;
+      setRefreshing(true);
       client
         .listRooms({ viewerClientId })
         .then((rooms) => {
+          if (!active) return;
           setOnline(rooms);
           setOnlineStatus('ready');
         })
-        .catch(() => setOnlineStatus('offline'));
+        .catch(() => {
+          if (active) setOnlineStatus('offline');
+        })
+        .finally(() => {
+          pending = false;
+          if (active) setRefreshing(false);
+        });
     };
     refresh();
     const timer = setInterval(refresh, 10_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    setLanStatus('connecting');
-    const subscription = subscribeLanRooms({
-      ...(lanServerUrl ? { serverUrl: lanServerUrl } : {}),
-      onRooms: setLanRooms,
-      onStatus: setLanStatus,
-    });
-    return () => subscription.close();
-  }, [lanServerUrl]);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [refreshKey]);
 
   const emptyState =
-    'flex min-h-[250px] flex-col items-center justify-center gap-1 rounded-[22px] border border-dashed border-border-strong bg-surface/75 p-9 text-center text-muted-foreground';
-  // 局域网有房间时用 order 提到前面，JSX 结构保持不变。
-  const preferLan = lanRooms.length > 0;
+    'flex min-h-[230px] flex-col items-center justify-center gap-1 border-0 bg-transparent p-6 text-center text-muted-foreground shadow-none';
 
   return (
-    <div className="mx-auto w-[min(1240px,100%)]">
-      <section className="relative mb-[42px] flex min-h-[260px] items-end justify-between gap-8 overflow-hidden rounded-[28px] border border-border bg-[linear-gradient(115deg,rgba(255,215,64,0.42),rgba(255,253,247,0.94)_52%,rgba(255,235,143,0.32)),var(--surface)] p-12 shadow-soft max-md:min-h-[310px] max-md:flex-col max-md:items-start max-md:justify-end max-md:rounded-[22px] max-md:p-7">
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute top-[-65%] right-[7%] size-[310px] rounded-full border-[55px] border-[rgba(199,153,0,0.08)]"
-        />
-        <div className="relative">
-          <span className="mb-2.5 block text-[11px] font-extrabold tracking-[0.16em] text-primary-bright">PARTI ONLINE</span>
-          <h1 className="mb-3 text-[clamp(38px,6vw,68px)] leading-[0.98] font-extrabold tracking-[-0.055em]">
-            <FormattedMessage id="lobby.hero.title" />
+    <div className="mx-auto w-full max-w-[1360px]">
+      <section className="flex flex-col items-center pt-8 pb-12 text-center sm:pt-12 sm:pb-16">
+        <div className="mb-5 inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="size-2 rounded-full bg-success" />
+          <FormattedMessage id="lobby.hero.title" />
+        </div>
+        <div className="w-full min-w-0">
+          <h1 className="mb-6 text-4xl leading-tight font-extrabold tracking-normal sm:text-6xl lg:text-7xl">
+            摸鱼<span className="text-primary-bright">派对</span>
           </h1>
-          <p className="max-w-[540px] text-base leading-[1.7] text-muted-foreground">
+          <p className="mx-auto max-w-[640px] text-base leading-8 text-muted-foreground sm:text-xl">
             <FormattedMessage id="lobby.hero.description" />
           </p>
         </div>
-        <div className="relative flex flex-col gap-4 max-md:w-full">
-          <div className="flex items-start gap-2 max-md:w-full">
+        <div className="mt-10 flex w-full max-w-[1120px] flex-wrap items-center gap-4 rounded-[28px] border border-border bg-surface/90 p-4 text-left shadow-soft sm:gap-5 sm:px-7 lg:mt-12 lg:rounded-full lg:py-5">
+          <div className="flex min-w-0 items-center gap-3 max-lg:flex-1 lg:mr-auto">
+            <img src="/moyu.png" alt="" className="size-12 shrink-0 rounded-lg object-cover sm:size-14" />
+            <span className="text-base font-semibold sm:text-lg">摸鱼派对</span>
+          </div>
+          <Button asChild size="lg" className="h-12 shrink-0 rounded-full px-5 sm:h-14 sm:px-7 sm:text-base">
+            <a href="#/editor"><PlusIcon data-icon="inline-start" /><FormattedMessage id="lobby.hero.createRoom" /></a>
+          </Button>
+          <div className="flex min-w-0 basis-full items-start gap-2 pb-4 lg:basis-[400px] lg:pb-0 [&>div>div]:rounded-full sm:[&>div>div]:h-14 sm:[&>button]:size-14 sm:[&_input]:text-base">
             <JoinLinkInput />
             <ScanJoinButton />
           </div>
-          <Button asChild size="lg" className="h-12 rounded-xl px-5 shadow-lg shadow-amber-500/15 max-md:w-full">
-            <a href="#/editor"><PlusIcon data-icon="inline-start" /><FormattedMessage id="lobby.hero.createRoom" /></a>
-          </Button>
-
+        </div>
+        <div className="mt-5 flex max-w-full flex-wrap items-center justify-center gap-3 [&_button]:whitespace-normal sm:[&_button]:px-5 sm:[&_button]:py-3 sm:[&_button]:text-sm">
           <AiCreationEntry
             onGoAdd={(handoff) => {
               saveAiImportHandoff(handoff);
@@ -118,18 +104,29 @@ export function Lobby() {
         </div>
       </section>
 
-      <div className="flex flex-col gap-10">
-        <section className={preferLan ? 'order-2' : 'order-1'}>
-          <div className="mb-[18px] flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="size-2 rounded-full bg-success shadow-[0_0_0_5px_rgba(81,219,147,0.11)]" />
-              <h2 className="text-xl font-semibold"><FormattedMessage id="lobby.live.title" /></h2>
-            </div>
+      <div className="flex flex-col gap-8">
+        <section>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl font-bold"><FormattedMessage id="lobby.hero.title" /></h2>
             {onlineStatus === 'ready' && (
-              <span className="text-xs text-muted-foreground">
+              <span className="rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">
                 {intl.formatMessage({ id: 'lobby.live.roomCount' }, { count: online.length })}
               </span>
             )}
+            </div>
+            <Button
+              variant="outline"
+              disabled={refreshing}
+              onClick={() => {
+                setRefreshing(true);
+                setRefreshKey((key) => key + 1);
+              }}
+              title="刷新列表"
+            >
+              <RefreshCwIcon className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? '刷新中' : '刷新列表'}
+            </Button>
           </div>
 
           {onlineStatus === 'loading' && <div className={emptyState}><FormattedMessage id="lobby.loading" /></div>}
@@ -148,19 +145,23 @@ export function Lobby() {
             </Card>
           )}
           {online.length > 0 && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-5">
               {online.map((room) => (
                 <Card
-                  className="gap-3 rounded-[18px] border-border bg-[linear-gradient(145deg,var(--surface-2),var(--surface))] py-5 shadow-[0_14px_35px_rgba(91,72,15,0.08)]"
+                  className="min-w-0 gap-5 rounded-lg border-border bg-surface py-5 shadow-sm transition-colors hover:border-primary-bright/50"
                   key={room.listingId}
                 >
-                  <CardHeader className="flex items-start justify-between gap-3 px-5">
-                    <div><CardTitle className="text-lg">{room.title}</CardTitle><CardDescription className="mt-1">{room.packageName}</CardDescription></div>
-                    {room.credentialRequired && <Badge variant="secondary"><FormattedMessage id="lobby.room.passwordRequired" /></Badge>}
+                  <CardHeader className="flex items-center gap-4 px-5">
+                    <img src="/moyu.png" alt="" className="size-16 shrink-0 rounded-lg object-cover sm:size-20" />
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="text-lg leading-7 break-words">{room.title}</CardTitle>
+                      <CardDescription className="mt-1 break-all">{room.packageName}</CardDescription>
+                      {room.credentialRequired && <Badge variant="secondary" className="mt-2"><FormattedMessage id="lobby.room.passwordRequired" /></Badge>}
+                    </div>
                   </CardHeader>
-                  <CardFooter className="bg-transparent border-none flex items-center justify-between gap-3 p-2">
-                    <span className="text-xs text-muted-foreground">
-                      <span aria-hidden="true" className="text-[8px] text-success">●</span>{' '}
+                  <CardFooter className="mx-5 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-transparent px-0 pt-4 pb-0">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <UsersIcon className="size-4 text-success" aria-hidden="true" />
                       {room.maxPlayers === null
                         ? intl.formatMessage({ id: 'lobby.room.playersOnline' }, { count: room.playerCount })
                         : intl.formatMessage({ id: 'lobby.room.playersCapacity' }, { current: room.playerCount, max: room.maxPlayers })}
@@ -188,86 +189,7 @@ export function Lobby() {
             </div>
           )}
         </section>
-
-        <section className={preferLan ? 'order-1' : 'order-2'}>
-          <div className="mb-[18px] flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <WifiIcon className="size-4 text-primary-bright" aria-hidden="true" />
-              <h2 className="text-xl font-semibold"><FormattedMessage id="lobby.lan.title" /></h2>
-            </div>
-            {lanStatus === 'ready' && (
-              <span className="text-xs text-muted-foreground">
-                {intl.formatMessage({ id: 'lobby.live.roomCount' }, { count: lanRooms.length })}
-              </span>
-            )}
-          </div>
-
-          {lanStatus === 'connecting' && <div className={emptyState}><FormattedMessage id="lobby.lan.loading" /></div>}
-          {lanStatus === 'offline' && (
-            <Card className={emptyState}>
-              <WifiOffIcon className="size-12 rounded-2xl bg-secondary p-3 text-primary-bright" aria-hidden="true" />
-              <h3 className="mt-3 mb-[7px] text-[19px] font-semibold text-foreground"><FormattedMessage id="lobby.lan.offlineTitle" /></h3>
-              <p className="mb-[18px]"><FormattedMessage id="lobby.lan.offlineDescription" /></p>
-            </Card>
-          )}
-          {lanRooms.length === 0 && lanStatus === 'ready' && (
-            <Card className={emptyState}>
-              <WifiIcon className="size-12 rounded-2xl bg-secondary p-3 text-primary-bright" aria-hidden="true" />
-              <h3 className="mt-3 mb-[7px] text-[19px] font-semibold text-foreground"><FormattedMessage id="lobby.lan.emptyTitle" /></h3>
-              <p className="mb-[18px]"><FormattedMessage id="lobby.lan.emptyDescription" /></p>
-            </Card>
-          )}
-          {lanRooms.length > 0 && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-              {lanRooms.map((room) => (
-                <RoomCard
-                  key={`${room.hostId}:${room.roomId}`}
-                  room={room}
-                  transportConfig={lanConfig}
-                  connectionInfo={room.hostId}
-                />
-              ))}
-            </div>
-          )}
-        </section>
       </div>
     </div>
-  );
-}
-
-function RoomCard({
-  room,
-  transportConfig,
-  connectionInfo,
-}: {
-  room: Pick<LobbyRoom, 'roomId' | 'title' | 'packageName' | 'playerCount' | 'maxPlayers' | 'joinable' | 'credentialRequired'>;
-  transportConfig: TransportConfig;
-  connectionInfo: string;
-}) {
-  const intl = useIntl();
-  return (
-    <Card className="gap-3 rounded-[18px] border-border bg-[linear-gradient(145deg,var(--surface-2),var(--surface))] py-5 shadow-[0_14px_35px_rgba(91,72,15,0.08)]">
-      <CardHeader className="flex items-start justify-between gap-3 px-5">
-        <div><CardTitle className="text-lg">{room.title}</CardTitle><CardDescription className="mt-1">{room.packageName}</CardDescription></div>
-        {room.credentialRequired && <Badge variant="secondary"><FormattedMessage id="lobby.room.passwordRequired" /></Badge>}
-      </CardHeader>
-      <CardFooter className="bg-transparent border-none flex items-center justify-between gap-3 p-2">
-        <span className="text-xs text-muted-foreground">
-          <span aria-hidden="true" className="text-[8px] text-success">●</span>{' '}
-          {room.maxPlayers === null
-            ? intl.formatMessage({ id: 'lobby.room.playersOnline' }, { count: room.playerCount })
-            : intl.formatMessage({ id: 'lobby.room.playersCapacity' }, { current: room.playerCount, max: room.maxPlayers })}
-        </span>
-        <Button
-          disabled={!room.joinable}
-          onClick={() => {
-            if (!room.joinable) return;
-            navigateToPeerJoin(buildJoinHashRoute(room.roomId, connectionInfo, undefined, transportConfig));
-          }}
-        >
-          <FormattedMessage id={room.joinable ? 'lobby.room.join' : 'lobby.room.full'} />
-        </Button>
-      </CardFooter>
-    </Card>
   );
 }

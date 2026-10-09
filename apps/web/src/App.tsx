@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { toast } from 'sonner';
 import { ArrowLeftIcon } from 'lucide-react';
-import { GithubIcon } from '@/components/icons/GithubIcon';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
@@ -131,7 +130,9 @@ function AppLayout() {
   return (
     <div>
       {!isPlayerRoute && !fullscreen && (
-        <header className="sticky top-0 z-30 border-b border-border/80 bg-card/90 backdrop-blur-xl">
+        <header className={isLobbyRoute
+          ? 'sticky top-3 z-30 mx-auto mt-4 w-[calc(100%-2rem)] max-w-[1360px] rounded-2xl border border-border/80 bg-card/90 backdrop-blur-xl'
+          : 'sticky top-0 z-30 border-b border-border/80 bg-card/90 backdrop-blur-xl'}>
           <div className="mx-auto flex h-20 w-full max-w-[1320px] items-center gap-3 px-4 sm:gap-5 sm:px-6">
             <a
               className="inline-flex shrink-0 items-center gap-3 rounded-lg text-xl font-extrabold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -141,17 +142,6 @@ function AppLayout() {
               <Logo size="md" />
               <span className="hidden sm:inline">摸鱼派对</span>
             </a>
-            <Button asChild variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
-              <a
-                href="https://github.com/glink25/Parti"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={intl.formatMessage({ id: 'app.header.github' })}
-                title={intl.formatMessage({ id: 'app.header.github' })}
-              >
-                <GithubIcon />
-              </a>
-            </Button>
             {!isLobbyRoute && (
               <Button asChild variant="ghost" size="default" className="ml-1 gap-1.5 text-muted-foreground sm:ml-4">
                 <a href="#/">
