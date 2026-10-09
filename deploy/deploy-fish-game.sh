@@ -8,7 +8,7 @@ CONTAINER="fish-game"
 IMAGE="fish-game:custom"
 PUBLIC_PORT="3215"
 CONTAINER_PORT="5157"
-PUBLIC_URL="https://your-domain.example.com"
+PUBLIC_URL="https://game.yucoder.cn"
 
 echo "[1/5] 拉取代码"
 if [ ! -d "$PROJECT_DIR/.git" ]; then
