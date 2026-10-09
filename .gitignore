@@ -9,9 +9,12 @@ apps/web/public/rooms/room-*
 .claude
 .pnpm-store
 .env
+.env.*
+!.env.example
 .agents
 skills-lock.json
 supabase
 dev-only
 .tinify_api_key
 apps/web/config.local.json
+data/
