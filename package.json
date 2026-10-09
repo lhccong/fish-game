@@ -7,29 +7,30 @@
   "description": "Parti — Web 多人互动房间 Runtime",
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "dev:web": "pnpm --filter @parti/web dev --host",
+    "dev:web": "npm run dev --workspace=@parti/web -- --host",
     "dev:mock": "node scripts/lobby-mock.mjs",
     "room:dev": "node scripts/room-dev.mjs",
     "lobby:mock": "node scripts/lobby-mock.mjs",
     "lobby:dev": "node scripts/lobby-mock.mjs",
     "build": "node scripts/room-build.mjs",
-    "build:web": "pnpm --filter @parti/web build",
+    "build:web": "npm run build --workspace=@parti/web",
     "start": "node --import tsx scripts/start.mjs",
     "start:prod": "node --import tsx scripts/start.mjs",
-    "preview": "pnpm --filter @parti/web preview",
+    "preview": "npm run preview --workspace=@parti/web",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b"
   },
   "devDependencies": {
-    "@parti/room-source": "workspace:*",
+    "@parti/room-source": "*",
     "@types/node": "^26.0.1",
     "tsx": "^4.20.6",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
-  },
-  "packageManager": "pnpm@10.15.1"
+  "packageManager": "npm@10.8.2",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ]
 }

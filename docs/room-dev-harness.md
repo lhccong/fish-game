@@ -1,21 +1,21 @@
 # Room 开发 Harness 与打包规范
 
 本文描述仓库内 `apps/room-*` / `apps/template-*` 如何接入 Parti Web 的开发与生产构建
-Harness。新建或修改带构建步骤的 Room 应用时，须满足本文规范，确保 `pnpm room:dev` 与
-根目录 `pnpm build` 能正常工作。
+Harness。新建或修改带构建步骤的 Room 应用时，须满足本文规范，确保 `npm run room:dev` 与
+根目录 `npm run build` 能正常工作。
 
 Harness 脚本：`scripts/room-app.mjs`、`scripts/room-dev.mjs`、`scripts/room-build.mjs`。
 
 ## 快速验证
 
 ```bash
-pnpm room:dev room-<name>   # 开发：Web + room watch 构建到 apps/web/public/rooms/<output>/
-pnpm build                  # 生产：所有 room-* build:room → apps/web/public/rooms/room-* → web build
+npm run room:dev room-<name>   # 开发：Web + room watch 构建到 apps/web/public/rooms/<output>/
+npm run build                  # 生产：所有 room-* build:room → apps/web/public/rooms/room-* → web build
 ```
 
 ## 项目结构与命名
 
-- 应用目录位于 `apps/room-*`（内置 Room，参与根 `pnpm build`）或 `apps/template-*`（脚手架/示例，仅开发）。
+- 应用目录位于 `apps/room-*`（内置 Room，参与根 `npm run build`）或 `apps/template-*`（脚手架/示例，仅开发）。
 - 必须包含 `public/parti.room.json`；`entry.ui` / `entry.worker` 文件名须与构建产物一致（现有 room 多为 `worker.js`，少数如 `room-tank-battle` 用 `room.worker.js`——以 manifest 为准，二者皆可，但必须自洽）。
 - `template-*` 的 manifest `id` 必须以 `dev-` 开头（由 `scripts/room-app.mjs` 校验）。
 
@@ -23,8 +23,8 @@ pnpm build                  # 生产：所有 room-* build:room → apps/web/pub
 
 | 脚本 | 谁需要 | 作用 |
 | --- | --- | --- |
-| `dev:room` | `room-*` 与 `template-*` | 被根命令 `pnpm room:dev <app>` 调用 |
-| `build:room` | 仅 `room-*` | 被根命令 `pnpm build` 调用 |
+| `dev:room` | `room-*` 与 `template-*` | 被根命令 `npm run room:dev <app>` 调用 |
+| `build:room` | 仅 `room-*` | 被根命令 `npm run build` 调用 |
 
 推荐写法（参考 `apps/room-undercover/package.json`）：
 

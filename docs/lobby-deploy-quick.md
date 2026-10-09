@@ -1,7 +1,7 @@
 # 大厅 10 分钟部署（Docker）
 
 把整套 Web + 大厅后端打包成**一个 Docker 镜像**。`docker run` 一条命令就起，
-配套 Caddy 自动签 HTTPS。适合**不想装 Node / pnpm / systemd** 的人。
+配套 Caddy 自动签 HTTPS。适合**不想装 Node / npm / systemd** 的人。
 
 镜像里只跑 `scripts/start.mjs` 一个进程：对外服务 `apps/web/dist/`，反代
 `/v1/*` 到内置的 lobby-mock 子进程，并把房间列表持久化到一个挂载卷。

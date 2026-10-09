@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@parti/room-packager": "workspace:*",
+    "@parti/room-packager": "*",
     "jszip": "^3.10.1"
   },
   "scripts": {

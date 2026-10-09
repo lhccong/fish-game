@@ -22,9 +22,9 @@
 ## 验证
 
 ```bash
-pnpm --filter @parti/room-werewolf typecheck
-pnpm --filter @parti/room-werewolf test
-pnpm --filter @parti/room-werewolf build
+npm run  --workspace=
+npm run  --workspace=
+npm run  --workspace=
 ```
 
 自动化只覆盖纯规则、秘密 payload 与 Worker 构建合约。多人流程、移动端布局和防场外效果由真人在目标设备上试玩确认。

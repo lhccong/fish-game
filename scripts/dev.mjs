@@ -4,10 +4,10 @@
  *
  * 设计目标：
  *  - 一个进程统领两个子进程，Ctrl+C / SIGTERM 时把两者一起关掉。
- *  - 任何子进程崩溃或主动退出，编排器退出，pnpm / 终端会负责清理。
+ *  - 任何子进程崩溃或主动退出，编排器退出，npm / 终端会负责清理。
  *  - 子进程 stdout / stderr 直接透传，保留各自的启动 banner。
  *
- * 用法（根目录 package.json 已暴露为 `pnpm dev`）：
+ * 用法（根目录 package.json 已暴露为 `npm run dev`）：
  *   node scripts/dev.mjs
  */
 import { spawn } from 'node:child_process';
@@ -23,9 +23,9 @@ const tasks = [
   {
     name: 'web',
     color: '\u001b[35m', // magenta
-    // pnpm 在 Windows 上是 pnpm.cmd；非 Windows 直接调 pnpm。
-    command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-    args: ['--filter', '@parti/web', 'dev', '--host'],
+    // npm 在 Windows 上是 npm.cmd；非 Windows 直接调 npm。
+    command: process.platform === 'win32' ? 'npm.cmd' : 'npm',
+    args: ['run', 'dev', '--workspace=@parti/web', '--', '--host'],
   },
 ];
 
@@ -38,7 +38,7 @@ function prefix(name, color) {
 }
 
 function spawnTask(task) {
-  // Windows 上 pnpm / vite 都是 .cmd 包装，shell: true 让 spawn 走 cmd.exe 解析后缀。
+  // Windows 上 npm / vite 都是 .cmd 包装，shell: true 让 spawn 走 cmd.exe 解析后缀。
   const child = spawn(task.command, task.args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: process.env,

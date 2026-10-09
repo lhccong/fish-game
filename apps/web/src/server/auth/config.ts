@@ -1,5 +1,5 @@
 /**
- * 启动时从环境变量或 config.json 读取 OAuth2 配置。
+ * 启动时从环境变量或 config.example.json 读取 OAuth2 配置。
  *
  * 优先级：
  *   1) 显式 PARTI_OAUTH2_CONFIG 指向的 JSON 文件（本地调试使用）
@@ -47,7 +47,7 @@ function loadRawConfig(): RawConfig {
   // 默认尝试 apps/web/config.local.json（不进仓库）；
   // 文件可不存在，函数返回空对象即可。
   // 用 process.cwd() 而非 import.meta.url：vite plugin 在 esbuild 编译后 import.meta.url
-  // 可能指向虚拟路径，从 process.cwd()（即 pnpm dev 启动的目录）出发更稳定。
+  // 可能指向虚拟路径，从 process.cwd()（即 npm run dev 启动的目录）出发更稳定。
   const cwd = process.cwd();
   const candidates = [
     path.join(cwd, 'apps', 'web', 'config.local.json'),

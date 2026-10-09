@@ -285,20 +285,20 @@ gameover → 房主点击重开 → lobby
 
 ```sh
 # 启动房间开发模式
-pnpm room:dev room-magicka
+npm run room:dev room-magicka
 
 # 规则与几何测试
-pnpm --filter @parti/room-magicka test
+npm run  --workspace=
 
 # TypeScript 检查
-pnpm --filter @parti/room-magicka typecheck
+npm run  --workspace=
 ```
 
 独立验证房间构建：
 
 ```sh
 PARTI_ROOM_BUILD_OUT_DIR=/tmp/parti-room-magicka-build \
-  pnpm --filter @parti/room-magicka build:room
+  npm run  --workspace=
 ```
 
 提交新机制前至少应覆盖：

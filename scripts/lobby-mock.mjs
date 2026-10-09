@@ -1,7 +1,7 @@
 /**
  * 本地 mock 大厅服务 —— 纯 Node 实现，无任何外部依赖。
  *
- * 实现 docs/lobby-service.md 描述的最小子集，让本机 pnpm dev 能跑通"公开到大厅"流程：
+ * 实现 docs/lobby-service.md 描述的最小子集，让本机 npm run dev 能跑通"公开到大厅"流程：
  *   - GET  /v1/health
  *   - GET  /v1/rooms
  *   - POST /v1/rooms

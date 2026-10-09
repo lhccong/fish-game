@@ -377,26 +377,26 @@ gameover
 在仓库根目录安装依赖：
 
 ```bash
-pnpm install
+npm install
 ```
 
 启动 Parti Web 和 Skyward Room 持续构建：
 
 ```bash
-pnpm room:dev room-skyward
+npm run room:dev room-skyward
 ```
 
 类型检查：
 
 ```bash
-pnpm --filter @parti/room-skyward typecheck
+npm run  --workspace=
 ```
 
 Room 正式构建由仓库根构建统一执行，也可以显式提供输出目录：
 
 ```bash
 PARTI_ROOM_BUILD_OUT_DIR=/tmp/room-skyward \
-  pnpm --filter @parti/room-skyward build:room
+  npm run  --workspace=
 ```
 
 仓库开发工具链应使用项目约定的 Node 22。使用不匹配的系统 Node 版本可能导致 Vite/esbuild 服务进程异常。

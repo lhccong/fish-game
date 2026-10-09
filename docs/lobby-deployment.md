@@ -1,7 +1,7 @@
 # 大厅后端生产部署
 
 > **想 10 分钟跑通？** 先看 [lobby-deploy-quick.md](./lobby-deploy-quick.md) —— **Docker 版**，
-> 一条 `docker run` 搞定，不用装 Node/pnpm/systemd。
+> 一条 `docker run` 搞定，不用装 Node/npm/systemd。
 > 本文档是**裸机版**完整手册：原理 + 所有环境变量 + 故障排查 + 升级路径。
 
 项目内自带一个**轻量、生产可用**的大厅服务：`scripts/lobby-mock.mjs`。本仓库的
@@ -15,7 +15,7 @@
 
 ## 1. 部署原理
 
-`pnpm start` 启动 `scripts/start.mjs`，**同进程内**做了三件事：
+`npm run start` 启动 `scripts/start.mjs`，**同进程内**做了三件事：
 
 ```
 ┌─────────────── PORT=5157 (公开) ───────────────┐
@@ -43,10 +43,6 @@
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# 安装 pnpm
-corepack enable
-corepack prepare pnpm@10.15.1 --activate
-
 # 安装 git（拉代码用）
 sudo apt install -y git
 ```
@@ -56,10 +52,10 @@ sudo apt install -y git
 ```bash
 git clone <your-fork-url> fish-game
 cd fish-game
-pnpm install --frozen-lockfile
+npm ci
 
 # 仅构建 Web 端（房间 app 通常不用跑，部署到大厅时是 Web 用户在玩）
-pnpm build:web
+npm run build:web
 ```
 
 构建后 `apps/web/dist/` 就是静态产物。
@@ -125,7 +121,7 @@ Caddy 会自动签发并续期 Let's Encrypt 证书。
 VITE_LOBBY_SERVICE_URL=https://lobby.example.com
 ```
 
-然后重新 `pnpm build:web`，重新跑 `pnpm start`。
+然后重新 `npm run build:web`，重新跑 `npm run start`。
 
 > 注意：构建期把 URL 编译进 bundle。换 URL 必须重新构建。
 
@@ -148,12 +144,12 @@ mock 自身也有相同的环境变量（`PORT`、`HOST`、`STORAGE_FILE`、`ALL
 - **日志**：`journalctl -u lobby -f`
 - **重启**：`sudo systemctl restart lobby`
 - **数据备份**：备份 `LOBBY_STORAGE_FILE` 指向的文件。**冷启动**会自动读回。
-- **升级**：拉新代码 → `pnpm install --frozen-lockfile` → `pnpm build:web` → `sudo systemctl restart lobby`
+- **升级**：拉新代码 → `npm install --frozen-lockfile` → `npm run build:web` → `sudo systemctl restart lobby`
 - **持久化丢失容忍**：60s 租约 + 客户端 20s 心跳 → 丢最坏也只丢 <1 分钟的房间列表
 
 ## 9. 什么时候这套不够用
 
 - **用户量超过单机**：并发写入 > 几百 qps（极小概率），持久化是单文件 JSON。
   升级路径：换 SQLite（`better-sqlite3`）或接 Postgres。协议无需变。
-- **多地域**：`pnpm start` 启动的是单实例。多地域要换成共享后端（Supabase / Redis）。
+- **多地域**：`npm run start` 启动的是单实例。多地域要换成共享后端（Supabase / Redis）。
   **本次发布不要走这条线**。

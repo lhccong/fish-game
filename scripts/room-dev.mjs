@@ -13,23 +13,25 @@ function fail(message) {
   process.exit(1);
 }
 
-if (!roomApp) fail('Usage: pnpm room:dev <room-app>');
+if (!roomApp) fail('Usage: npm run room:dev <room-app>');
 const room = await loadRoomApp(rootDir, roomApp, 'dev:room').catch((error) => {
   fail(error instanceof Error ? error.message : String(error));
 });
 const outputDir = path.join(rootDir, 'apps', 'web', 'public', 'rooms', room.outputName);
 await rm(outputDir, { recursive: true, force: true });
 
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const children = [
-  spawn(pnpm, ['--filter', '@parti/web', 'dev', '--host'], {
+  spawn(npm, ['run', 'dev', '--workspace=@parti/web', '--', '--host'], {
     cwd: rootDir,
     stdio: 'inherit',
+    shell: true,
   }),
-  spawn(pnpm, ['run', 'dev:room'], {
+  spawn(npm, ['run', 'dev:room'], {
     cwd: room.appDir,
     stdio: 'inherit',
     env: { ...process.env, PARTI_ROOM_DEV_OUT_DIR: outputDir },
+    shell: true,
   }),
 ];
 

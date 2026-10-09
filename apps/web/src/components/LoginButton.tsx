@@ -47,8 +47,8 @@ export function LoginButton(): ReactElement | null {
   if (!user) {
     return (
       <Button
-        size="sm"
-        className="gap-1.5"
+        size="default"
+        className="gap-2 text-base"
         disabled={busy}
         onClick={() => void handleLogin()}
         data-testid="parti-login"
@@ -62,8 +62,8 @@ export function LoginButton(): ReactElement | null {
   return (
     <Button
       variant="ghost"
-      size="sm"
-      className="gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+      size="default"
+      className="gap-2 px-2.5 text-base text-muted-foreground hover:text-foreground"
       aria-label={intl.formatMessage({ id: 'auth.logoutAria' }, { name: user.name })}
       title={intl.formatMessage({ id: 'auth.logoutTitle' })}
       onClick={() => void handleLogout()}
@@ -74,11 +74,11 @@ export function LoginButton(): ReactElement | null {
         <img
           src={user.avatar}
           alt=""
-          className="size-6 rounded-full border border-border object-cover"
+          className="size-8 rounded-full border border-border object-cover"
           referrerPolicy="no-referrer"
         />
       ) : (
-        <span className="grid size-6 place-items-center rounded-full bg-primary/20 text-[11px] font-semibold text-primary-bright">
+        <span className="grid size-8 place-items-center rounded-full bg-primary/20 text-sm font-semibold text-primary-bright">
           {user.name.slice(0, 1)}
         </span>
       )}

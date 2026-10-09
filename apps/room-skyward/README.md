@@ -15,7 +15,7 @@
 ## 开发
 
 ```sh
-pnpm room:dev room-skyward-2
-pnpm --filter @parti/room-skyward-2 test
-pnpm --filter @parti/room-skyward-2 typecheck
+npm run room:dev room-skyward-2
+npm run  --workspace=
+npm run  --workspace=
 ```

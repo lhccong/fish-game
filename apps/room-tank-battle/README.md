@@ -6,7 +6,7 @@ PartiFlow 运行房主权威的规则、AI 与同步。
 ## 开发
 
 ```bash
-pnpm room:dev room-tank-battle
+npm run room:dev room-tank-battle
 ```
 
 ## 控制

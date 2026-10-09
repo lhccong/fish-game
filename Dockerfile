@@ -4,22 +4,22 @@
 # ── 1. 构建阶段 ───────────────────────────────────────────────
 FROM node:20-bookworm-slim AS builder
 
-# pnpm + 离线安装锁定的依赖
-ENV PNPM_HOME=/pnpm \
-    PATH=/pnpm:$PATH
-RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
-
 WORKDIR /app
 
+ARG VITE_LOBBY_SERVICE_URL
+ENV VITE_LOBBY_SERVICE_URL=${VITE_LOBBY_SERVICE_URL}
+
 # 先复制 lockfile + package.json，最大化缓存命中
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY package-lock.json package.json tsconfig.base.json tsconfig.json ./
 COPY apps/web/package.json ./apps/web/package.json
 # 其余 workspace package.json
 COPY apps ./apps
+COPY packages ./packages
+COPY scripts ./scripts
 
 # 安装 + 构建 Web 端（不需要构建 Room app）
-RUN pnpm install --frozen-lockfile
-RUN pnpm build:web
+RUN npm ci
+RUN npm run build:web
 
 # ── 2. 运行阶段 ───────────────────────────────────────────────
 FROM node:20-bookworm-slim AS runtime
@@ -28,19 +28,17 @@ ENV NODE_ENV=production \
     PORT=5157 \
     HOST=0.0.0.0 \
     LOBBY_INTERNAL=5158 \
-    STORAGE_FILE=/data/lobby.json \
+    LOBBY_STORAGE_FILE=/data/lobby.json \
     STATIC_DIR=/app/apps/web/dist
 
 WORKDIR /app
 
 # 单独安装生产依赖（这里 start.mjs 用了 tsx，因此保留 devDependencies）
 COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/package-lock.json ./package-lock.json
 COPY --from=builder /app/apps ./apps
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/web/node_modules ./apps/web/node_modules
 
 # 健康检查要 wget，slim 镜像默认没有
 RUN apt-get update \

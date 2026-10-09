@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@parti/flow": "workspace:*",
+    "@parti/flow": "*",
     "littlejsengine": "1.18.15"
   },
   "devDependencies": {

@@ -12,7 +12,7 @@ Parti 的核心能力：
 - **重开**：`restart` action
 
 > 本篇代码已通过真实 Runtime 跑通验证（座位分配、非法落子拒绝、连线获胜、重开）。
-> 把三个文件放进 `apps/web/public/rooms/tic-tac-toe/` 即可在 `pnpm dev` 里游玩。
+> 把三个文件放进 `apps/web/public/rooms/tic-tac-toe/` 即可在 `npm run dev` 里游玩。
 
 先复习一下心智模型（详见 [快速开始](./getting-started.md)）：
 
@@ -289,7 +289,7 @@ export default defineRoom({
 ## 4. 运行
 
 ```bash
-pnpm dev   # http://localhost:5173
+npm run dev   # http://localhost:5173
 ```
 
 把上面三个文件放进 `apps/web/public/rooms/tic-tac-toe/`，用「本地预览（Host+2 位初始玩家）」

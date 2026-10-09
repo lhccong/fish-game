@@ -1,21 +1,21 @@
 {
-  "name": "Parti — 和朋友一起创造，一起游玩",
-  "short_name": "Parti",
-  "description": "Web 多人互动房间",
+  "name": "摸鱼派对 — 和朋友一起玩",
+  "short_name": "摸鱼派对",
+  "description": "和朋友一起创建、分享和游玩多人小游戏",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fff9e8",
   "theme_color": "#FFD337",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
+      "src": "/moyu.png",
+      "sizes": "809x809",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
+      "src": "/moyu.png",
+      "sizes": "809x809",
       "type": "image/png",
       "purpose": "any maskable"
     }

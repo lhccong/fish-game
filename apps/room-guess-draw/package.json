@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@parti/worker-sdk": "workspace:*",
+    "@parti/worker-sdk": "*",
     "konva": "^10.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

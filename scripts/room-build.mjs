@@ -8,15 +8,15 @@ import { loadRoomApp } from './room-app.mjs';
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const appsDir = path.join(rootDir, 'apps');
 const roomsDir = path.join(appsDir, 'web', 'public', 'rooms');
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function run(args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(pnpm, args, { cwd: rootDir, stdio: 'inherit', ...options });
+    const child = spawn(npm, args, { cwd: rootDir, stdio: 'inherit', shell: true, ...options });
     child.on('error', reject);
     child.on('close', (code, signal) => {
       if (code === 0) resolve();
-      else reject(new Error(`pnpm ${args.join(' ')} exited with ${signal ? `signal ${signal}` : `code ${code ?? 1}`}`));
+      else reject(new Error(`npm ${args.join(' ')} exited with ${signal ? `signal ${signal}` : `code ${code ?? 1}`}`));
     });
   });
 }
@@ -44,7 +44,7 @@ try {
     });
   }
 
-  await run(['--filter', '@parti/web', 'build']);
+  await run(['run', 'build', '--workspace=@parti/web']);
 } catch (error) {
   console.error(`[room:build] ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);

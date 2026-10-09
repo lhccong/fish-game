@@ -132,16 +132,16 @@ function AppLayout() {
     <div>
       {!isPlayerRoute && !fullscreen && (
         <header className="sticky top-0 z-30 border-b border-border/80 bg-card/90 backdrop-blur-xl">
-          <div className="mx-auto flex h-16 w-full max-w-[1320px] items-center gap-2 px-3 sm:gap-4 sm:px-6">
+          <div className="mx-auto flex h-20 w-full max-w-[1320px] items-center gap-3 px-4 sm:gap-5 sm:px-6">
             <a
-              className="inline-flex shrink-0 items-center gap-2 rounded-lg text-lg font-extrabold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="inline-flex shrink-0 items-center gap-3 rounded-lg text-xl font-extrabold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               href="#/"
               aria-label={intl.formatMessage({ id: 'app.header.backToLobby' })}
             >
-              <Logo />
-              <span className="hidden sm:inline">Parti</span>
+              <Logo size="md" />
+              <span className="hidden sm:inline">摸鱼派对</span>
             </a>
-            <Button asChild variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground hover:text-foreground">
+            <Button asChild variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
               <a
                 href="https://github.com/glink25/Parti"
                 target="_blank"
@@ -153,14 +153,14 @@ function AppLayout() {
               </a>
             </Button>
             {!isLobbyRoute && (
-              <Button asChild variant="ghost" size="sm" className="ml-1 gap-1.5 text-muted-foreground sm:ml-4">
+              <Button asChild variant="ghost" size="default" className="ml-1 gap-1.5 text-muted-foreground sm:ml-4">
                 <a href="#/">
                   <ArrowLeftIcon data-icon="inline-start" />
                   {intl.formatMessage({ id: 'app.header.back' })}
                 </a>
               </Button>
             )}
-            <div className="ml-auto flex shrink-0 items-center gap-1">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
               <TransportIndicator />
               <LoginButton />
               {isLobbyRoute && <UserSettings />}
@@ -172,7 +172,7 @@ function AppLayout() {
         className={
           isPlayerRoute || fullscreen
             ? 'min-h-[100dvh]'
-            : 'min-h-[calc(100vh-64px)] px-4 pt-7 pb-12 md:px-6 md:pt-10 md:pb-16'
+            : 'min-h-[calc(100vh-80px)] px-4 pt-7 pb-12 md:px-6 md:pt-10 md:pb-16'
         }
       >
         <Suspense fallback={null}>{view}</Suspense>

@@ -173,7 +173,7 @@ worker/index.ts 拆成 turns.ts / events.ts 后，index.ts 只剩生命周期与
 3. **Worker 拆分与类型化**：turns/events 分离，去 `any`，跑测试。
 4. **客户端拆模块**：先拆 audio/feedback/overlay/hud（纯 UI，风险最低），
    再拆 render/scene，最后收敛 replica 状态机（风险最高，放最后）。
-5. **每步完成验证**：`pnpm test`（app 内 vitest）+ `pnpm room:dev room-dart-roulette`
+5. **每步完成验证**：`npm test`（app 内 vitest）+ `npm run room:dev room-dart-roulette`
    启动无报错 + `build:room` 成功（见 docs/room-dev-harness.md），
    关键步骤后人工联机试玩一局。
 6. **文档回写**：行为或结构有变时更新本目录三篇文档与根 AGENTS.md 相关条目。

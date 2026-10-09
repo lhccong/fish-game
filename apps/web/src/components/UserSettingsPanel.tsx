@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useIntl } from 'react-intl';
-import { CircleCheckIcon, CoffeeIcon, GaugeIcon, NetworkIcon } from 'lucide-react';
+import { CircleCheckIcon, GaugeIcon, NetworkIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/sheet';
 import { LOCALE_LABELS, LOCALES, type AppLocale } from '@/i18n/locales';
 import { useLocale } from '@/i18n/LocaleProvider';
-import { DonationDialog } from './DonationDialog';
 import { TransportProfilesDialog } from './TransportProfilesDialog';
 import { clearAllBrowserStorage } from '../lib/clearLocalData';
 import {
@@ -65,13 +64,15 @@ export function UserSettingsPanel({ open, onOpenChange }: UserSettingsPanelProps
   const { locale, setLocale } = useLocale();
   const [profilesVersion, setProfilesVersion] = useState(0);
   const [profilesOpen, setProfilesOpen] = useState(false);
-  const [donationOpen, setDonationOpen] = useState(false);
   const [clearDataOpen, setClearDataOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [fishUser, setFishUser] = useState<FishUser | null>(() => getCachedFishUser());
   const [fishBusy, setFishBusy] = useState(false);
-  const profiles = getTransportProfiles();
-  const selectedProfile = getSelectedTransportProfile();
+  const profiles = getTransportProfiles().filter((profile) => profile.config.adapter !== 'lan');
+  const storedSelectedProfile = getSelectedTransportProfile();
+  const selectedProfile = storedSelectedProfile.config.adapter === 'lan'
+    ? profiles.find((profile) => profile.config.adapter === 'peerjs') ?? storedSelectedProfile
+    : storedSelectedProfile;
   const transportSuffix = transportMessageSuffix(selectedProfile.config);
 
   useEffect(() => {
@@ -279,22 +280,6 @@ export function UserSettingsPanel({ open, onOpenChange }: UserSettingsPanelProps
             </CardContent>
           </Card>
 
-          <Card className={sectionCardClass}>
-            <CardHeader>
-              <span className="text-[9px] font-extrabold tracking-[0.14em] text-primary-bright uppercase">
-                {intl.formatMessage({ id: 'user.settings.donationEyebrow' })}
-              </span>
-              <CardTitle className="mt-1 text-lg">{intl.formatMessage({ id: 'user.settings.donationTitle' })}</CardTitle>
-              <CardDescription>{intl.formatMessage({ id: 'user.settings.donationDescription' })}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button type="button" variant="outline" className="w-full" onClick={() => setDonationOpen(true)}>
-                <CoffeeIcon data-icon="inline-start" />
-                {intl.formatMessage({ id: 'user.settings.donationButton' })}
-              </Button>
-            </CardContent>
-          </Card>
-
           <div className="border-t border-border pt-4">
             <Button type="button" variant="destructive" className="w-full" onClick={() => setClearDataOpen(true)}>
               {intl.formatMessage({ id: 'user.settings.clearData' })}
@@ -308,7 +293,6 @@ export function UserSettingsPanel({ open, onOpenChange }: UserSettingsPanelProps
         onOpenChange={setProfilesOpen}
         onProfilesChange={() => setProfilesVersion((current) => current + 1)}
       />
-      <DonationDialog open={donationOpen} onOpenChange={setDonationOpen} />
       <Dialog open={clearDataOpen} onOpenChange={setClearDataOpen}>
         <DialogContent>
           <DialogHeader>

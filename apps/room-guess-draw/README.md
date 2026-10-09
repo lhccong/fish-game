@@ -223,10 +223,10 @@ Worker 模块内存保存：
 常用命令：
 
 ```bash
-pnpm room:dev room-guess-draw
-pnpm --filter @parti/room-guess-draw typecheck
-pnpm --filter @parti/room-guess-draw test
-PARTI_ROOM_BUILD_OUT_DIR=/tmp/room-guess-draw-package pnpm --filter @parti/room-guess-draw build:room
+npm run room:dev room-guess-draw
+npm run  --workspace=
+npm run  --workspace=
+PARTI_ROOM_BUILD_OUT_DIR=/tmp/room-guess-draw-package npm run  --workspace=
 ```
 
 自动检查应关注完整 Package 是否输出到 Harness 提供的目录，以及 manifest、UI 和 Worker 入口是否齐全。

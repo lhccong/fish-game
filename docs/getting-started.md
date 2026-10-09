@@ -149,8 +149,8 @@ html, body {
 在仓库里：
 
 ```bash
-pnpm install
-pnpm dev        # 启动 Web 应用 http://localhost:5157
+npm install
+npm run dev        # 启动 Web 应用 http://localhost:5157
 ```
 
 打开应用后有两种运行方式：
@@ -174,7 +174,7 @@ pnpm dev        # 启动 Web 应用 http://localhost:5157
 仓库内带构建步骤的 Room 应用可以通过开发 Harness 与 Parti Web 一起启动：
 
 ```bash
-pnpm room:dev template-react
+npm run room:dev template-react
 ```
 
 该命令会同时启动 Web 和 Room 的持续构建。`template-react` 的构建产物会临时发布到
@@ -186,7 +186,7 @@ Room 应用分为两类：
 
 - `apps/template-*` 是脚手架或示例，只参与开发和自身的独立打包；其开发 manifest ID
   需要以 `dev-` 开头。
-- `apps/room-*` 是 Web 自带 Room，开发方式与模板相同，并会在根目录执行 `pnpm build`
+- `apps/room-*` 是 Web 自带 Room，开发方式与模板相同，并会在根目录执行 `npm run build`
   时先构建到 `apps/web/public/rooms/<room-app>/`，随后一同进入 Web 生产产物。
 
 两类应用都需要包含 `public/parti.room.json`，并在 `package.json` 提供 `dev:room` 脚本。

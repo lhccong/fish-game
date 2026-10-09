@@ -109,14 +109,14 @@ Place the files in `apps/web/public/rooms/<room-id>/`, or package them as a ZIP 
 
 ## Local development
 
-You will need Node.js, [pnpm](https://pnpm.io/), and a modern browser with WebRTC and Web Worker support.
+You will need Node.js, npm, and a modern browser with WebRTC and Web Worker support.
 
 ```bash
-pnpm install
-pnpm dev        # Start the web app at http://localhost:5173
-pnpm test       # Run protocol and runtime tests
-pnpm typecheck  # Type-check the complete monorepo
-pnpm build      # Build apps/room-* first, then bundle them with the web app
+npm install
+npm run dev        # Start the web app at http://localhost:5173
+npm test           # Run protocol and runtime tests
+npm run typecheck  # Type-check the complete monorepo
+npm run build      # Build apps/room-* first, then bundle them with the web app
 ```
 
 Development mode includes local multiplayer preview and DevTools; these are excluded from production builds. Private rooms and invitation links continue to work without a configured lobby service.

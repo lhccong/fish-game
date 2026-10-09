@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@parti/core": "workspace:*",
+    "@parti/core": "*",
     "peerjs": "^1.5.4"
   },
   "scripts": {

@@ -25,12 +25,12 @@ export function UserSettings() {
     <>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="icon"
         className="shrink-0 text-muted-foreground hover:text-foreground"
         aria-label={intl.formatMessage({ id: 'user.settings.ariaLabel' })}
         onClick={openSettings}
       >
-        <SettingsIcon />
+        <SettingsIcon className="size-5" />
       </Button>
       {loaded && (
         <Suspense fallback={null}>

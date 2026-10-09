@@ -8,7 +8,7 @@
     "./worker-entry": "./src/worker-entry.ts"
   },
   "dependencies": {
-    "@parti/core": "workspace:*"
+    "@parti/core": "*"
   },
   "scripts": {
     "typecheck": "tsc -b"

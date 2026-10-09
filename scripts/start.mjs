@@ -15,7 +15,7 @@
  *      其余   → apps/web/dist/ + SPA fallback
  *
  * 用法（package.json scripts.start 已配好）：
- *   pnpm start
+ *   npm run start
  *
  * 可覆盖环境变量：
  *   PORT               外部端口，默认 5157

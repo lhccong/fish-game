@@ -47,7 +47,10 @@ export function TransportIndicator() {
     };
   }, []);
 
-  const { profiles, selected } = transportState;
+  const profiles = transportState.profiles.filter((profile) => profile.config.adapter !== 'lan');
+  const selected = transportState.selected.config.adapter === 'lan'
+    ? profiles.find((profile) => profile.config.adapter === 'peerjs') ?? transportState.selected
+    : transportState.selected;
   const kind = transportKind(selected.config);
   const Icon = transportIcons[kind];
   const label = intl.formatMessage({ id: `user.settings.transport.${kind}.optionLabel` });
@@ -58,12 +61,12 @@ export function TransportIndicator() {
       <DropdownMenuPrimitive.Trigger asChild>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon"
           className="text-muted-foreground hover:text-foreground"
           aria-label={accessibleLabel}
           title={accessibleLabel}
         >
-          <Icon className="size-4" aria-hidden="true" />
+          <Icon className="size-5" aria-hidden="true" />
         </Button>
       </DropdownMenuPrimitive.Trigger>
       <DropdownMenuPrimitive.Portal>

@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 
-export const LOGO_URL = '/icon-512.png';
+export const LOGO_URL = '/moyu.png';
 
 const sizeClasses = {
   sm: 'size-[34px] rounded-[11px]',

@@ -25,7 +25,7 @@ export PARTI_OAUTH2_STATE_SECRET=$(openssl rand -hex 32)
 export PARTI_OAUTH2_SESSION_SECRET=$(openssl rand -hex 32)
 
 # 单端口启动（Vite dev server 已内置 OAuth2 中间件）
-pnpm --filter @parti/web dev --host
+npm run  --workspace= --host
 ```
 
 监听端口默认 `5157`，与 Vite 一致；可通过 `PARTI_WEB_PORT` 覆盖。

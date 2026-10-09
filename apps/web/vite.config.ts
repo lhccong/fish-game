@@ -101,6 +101,8 @@ function webVendorChunk(id: string): string | undefined {
 }
 
 export default defineConfig({
+  // npm workspace 从 apps/web 启动 Vite，但本地环境配置放在仓库根目录。
+  envDir: path.resolve(__dirname, '..', '..'),
   plugins: [
     roomRegistryPlugin(),
     authMiddlewarePlugin(),
