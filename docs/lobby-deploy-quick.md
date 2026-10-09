@@ -107,6 +107,7 @@ docker run --rm -v fish-data:/data -v $(pwd):/backup \
 # 恢复
 docker run --rm -v fish-data:/data -v $(pwd):/backup \
   alpine tar xzf /backup/lobby-backup.tgz -C /
+  
 ```
 
 ## 常用命令
