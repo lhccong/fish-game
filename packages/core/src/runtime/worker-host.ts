@@ -17,6 +17,8 @@ export interface RoomWorkerCallbacks {
   onSend(playerId: string, event: string, payload: unknown): void;
   /** room.kick(playerId, reason) */
   onKick(playerId: string, reason: string | undefined): void;
+  /** 游戏逻辑控制：是否允许新玩家加入（见 game:joinable-changed 约定） */
+  onJoinableChange(joinable: boolean): void;
   /** room.log(...args) */
   onLog(args: unknown[]): void;
   /** worker 内运行时错误 */

@@ -17,6 +17,22 @@ export interface LobbyRoom {
   playerCount: number;
   maxPlayers: number | null;
   joinable: boolean;
+  /**
+   * 游戏逻辑侧是否允许新玩家加入（区别于席位是否已满）。
+   * 局中（bidding/playing）时为 false，但局中掉线的稳定身份仍可凭 clientId 重连。
+   */
+  gameJoinable: boolean;
+  /**
+   * 房间内所有玩家（含 host）的稳定 clientId 列表。lobby server 据此给
+   * 特定 viewer 计算 `selfRejoinable`，让局中掉线的人在 30s 内看到
+   * "加入游戏"按钮。
+   */
+  playerClientIds?: string[];
+  /**
+   * 调用方查询 rooms 时带上 `viewerClientId`，lobby server 在响应里补充这个
+   * 字段：viewer 的 clientId 是否仍属于这个房间（用于"加入游戏"按钮启用条件）。
+   */
+  selfRejoinable?: boolean;
   credentialRequired: boolean;
   metadata?: Record<string, LobbyJsonValue>;
   createdAt: number;
@@ -66,8 +82,11 @@ export class LobbyClient {
     await this.request('/v1/health');
   }
 
-  async listRooms(): Promise<LobbyRoom[]> {
-    const data = await this.request<{ rooms: LobbyRoom[] }>('/v1/rooms');
+  async listRooms(options: { viewerClientId?: string } = {}): Promise<LobbyRoom[]> {
+    const query = options.viewerClientId
+      ? `?viewerClientId=${encodeURIComponent(options.viewerClientId)}`
+      : '';
+    const data = await this.request<{ rooms: LobbyRoom[] }>(`/v1/rooms${query}`);
     return data.rooms;
   }
 

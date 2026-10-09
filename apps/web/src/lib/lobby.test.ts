@@ -17,6 +17,7 @@ const input: LobbyRoomInput = {
   playerCount: 1,
   maxPlayers: 4,
   joinable: true,
+  gameJoinable: true,
   credentialRequired: true,
 };
 

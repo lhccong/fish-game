@@ -79,6 +79,8 @@ export type GameState = {
     spring: boolean;
     multiplier: number;
   } | null;
+  /** 当前轮到行动但已离线的玩家，其 rejoin 超时的绝对时间戳（ms）。null = 无人在等。 */
+  rejoinDeadline: number | null;
   message: string;
 };
 

@@ -12,6 +12,16 @@ function broadcastAction(ctx: RoomContext<GameState>, kind: string, payload: Rec
   ctx.broadcast('game:action', { actionId: `doudizhu:${occurredAt}:${++actionSequence}`, occurredAt, kind, ...payload });
 }
 
+/**
+ * 发送 game:joinable-changed 事件，HostRuntime 会拦截并控制是否允许新玩家加入。
+ * 游戏中（bidding/playing）禁止新加入，局前/结算时允许。
+ * @param ctx   RoomContext
+ * @param joinable  true = 可加入，false = 不可加入
+ */
+function setGameJoinable(ctx: RoomContext<GameState>, joinable: boolean) {
+  ctx.broadcast('game:joinable-changed', joinable);
+}
+
 export default defineRoom<GameState>({
   meta: { name: '斗地主', minPlayers: 3, maxPlayers: 3 },
 
@@ -30,6 +40,7 @@ export default defineRoom<GameState>({
     if (existing) {
       existing.connected = true;
       existing.name = player.name;
+      ctx.state.rejoinDeadline = null;
       sendHand(ctx, player.id);
       return;
     }
@@ -59,6 +70,7 @@ export default defineRoom<GameState>({
     if (statePlayer) {
       statePlayer.connected = true;
       statePlayer.name = player.name;
+      ctx.state.rejoinDeadline = null;
       sendHand(ctx, player.id);
     }
   },
@@ -67,19 +79,28 @@ export default defineRoom<GameState>({
     const statePlayer = ctx.state.players[player.id];
     if (!statePlayer) return;
 
-    if (ctx.state.phase === 'bidding' || ctx.state.phase === 'playing') {
-      statePlayer.connected = false;
-      ctx.state.message = `${statePlayer.name} 离线，等待重连`;
-      return;
-    }
+    // 局中（bidding/playing）发生中途退出 = 本局人数已不足 3 人，本局作废、流局不记分，
+    // 回到 settlement 阶段让剩余玩家准备下一局。局前（waiting/ready/settlement）则正常等待补人。
+    const wasMidRound =
+      ctx.state.phase === 'bidding' || ctx.state.phase === 'playing';
 
+    // 通用清理：座位、玩家、手牌、手数、rejoin 标记。
+    ctx.state.rejoinDeadline = null;
     ctx.state.seats[statePlayer.seat] = null;
     delete ctx.state.players[player.id];
     delete ctx.state.handCounts[player.id];
     delete hands[player.id];
+
     if (playersCount(ctx.state) < 3) {
-      ctx.state.phase = 'waiting';
-      ctx.state.message = '等待三名玩家加入';
+      if (wasMidRound) {
+        voidRound(ctx, statePlayer.name);
+      } else {
+        ctx.state.phase = 'waiting';
+        ctx.state.message = '等待三名玩家加入';
+        // 退出到非满员时显式放行：避免 gameJoinable 残留在 false 导致 lobby 列表
+        // 误显"游戏中"。
+        setGameJoinable(ctx, true);
+      }
     }
   },
 
@@ -95,34 +116,10 @@ export default defineRoom<GameState>({
     },
 
     bid(ctx, { player, payload }) {
-      if (ctx.state.phase !== 'bidding' || ctx.state.bidState?.currentPlayerId !== player.id) return;
       const score = Number(payload && payload.score);
       if (!Number.isInteger(score) || score < 0 || score > 3) return;
-      if (score > 0 && score <= ctx.state.bidState.highestScore) return;
-
-      const bid = ctx.state.bidState;
-      bid.turns += 1;
-      if (score === 0) {
-        if (!bid.passed.includes(player.id)) bid.passed.push(player.id);
-      } else {
-        bid.highestScore = score;
-        bid.highestPlayerId = player.id;
-      }
-
-      ctx.broadcast('game:notice', { message: `${ctx.state.players[player.id].name}${score === 0 ? '不叫' : `叫 ${score} 分`}` });
-      broadcastAction(ctx, 'bidPlaced', { actorId: player.id, value: score, label: score === 0 ? '不叫' : `叫 ${score} 分` });
-
-      if (score === 3 || bid.turns >= 3) {
-        if (!bid.highestPlayerId) {
-          ctx.broadcast('game:notice', { message: '无人叫地主，重新发牌' });
-          startRound(ctx);
-          return;
-        }
-        beginPlaying(ctx, bid.highestPlayerId, bid.highestScore);
-        return;
-      }
-
-      bid.currentPlayerId = nextPlayerId(ctx.state, player.id);
+      if (score > 0 && score <= ctx.state.bidState!.highestScore) return;
+      applyBid(ctx, player.id, score);
     },
 
     playCards(ctx, { player, payload }) {
@@ -172,18 +169,7 @@ export default defineRoom<GameState>({
     pass(ctx, { player }) {
       if (ctx.state.phase !== 'playing' || ctx.state.currentPlayerId !== player.id) return;
       if (!ctx.state.lastPlay || ctx.state.lastPlay.playerId === player.id) return;
-
-      ctx.state.playedCards.push({ playerId: player.id, pass: true });
-      broadcastAction(ctx, 'playerPassed', { actorId: player.id, label: '不出' });
-      ctx.state.round.passCount += 1;
-      if (ctx.state.round.passCount >= 2) {
-        ctx.state.currentPlayerId = ctx.state.lastPlay.playerId;
-        ctx.state.lastPlay = null;
-        ctx.state.round.passCount = 0;
-        broadcastAction(ctx, 'trickCleared', { actorId: ctx.state.currentPlayerId });
-        return;
-      }
-      ctx.state.currentPlayerId = nextPlayerId(ctx.state, player.id);
+      applyPass(ctx, player.id);
     },
 
     syncHand(ctx, { player }) {
@@ -213,6 +199,7 @@ function createInitialState(): GameState {
       playCounts: {},
     },
     result: null,
+    rejoinDeadline: null,
     message: '等待三名玩家加入',
   };
 }
@@ -235,6 +222,7 @@ function startRound(ctx: RoomContext<GameState>) {
   state.playedCards = [];
   state.handCounts = Object.fromEntries(players.map((player) => [player.id, 17]));
   state.result = null;
+  state.rejoinDeadline = null;
   state.round = {
     number: state.round.number + 1,
     starterSeat: state.round.number % 3,
@@ -260,6 +248,7 @@ function startRound(ctx: RoomContext<GameState>) {
   state.message = '开始叫地主';
   ctx.broadcast('game:notice', { message: '新一局开始，叫地主' });
   broadcastAction(ctx, 'dealStarted', { actorId: starterId });
+  setGameJoinable(ctx, false); // bidding 阶段禁止新加入
 }
 
 function beginPlaying(ctx: RoomContext<GameState>, landlordId: string, baseScore: number) {
@@ -269,6 +258,7 @@ function beginPlaying(ctx: RoomContext<GameState>, landlordId: string, baseScore
   state.landlordCardsVisible = sortCards(landlordCardsHidden);
   state.currentPlayerId = landlordId;
   state.bidState = null;
+  state.rejoinDeadline = null;
   state.round.baseScore = baseScore;
   state.round.multiplier = Math.max(1, baseScore);
   state.message = `${state.players[landlordId].name} 成为地主`;
@@ -310,6 +300,7 @@ function settleRound(ctx: RoomContext<GameState>, winnerId: string) {
 
   state.phase = 'settlement';
   state.currentPlayerId = null;
+  state.rejoinDeadline = null;
   state.result = {
     winnerTeam: landlordWon ? 'landlord' : 'farmers',
     winnerIds: landlordWon ? [landlordId] : farmerIds,
@@ -321,6 +312,42 @@ function settleRound(ctx: RoomContext<GameState>, winnerId: string) {
   if (spring) broadcastAction(ctx, 'multiplierChanged', { actorId: winnerId, value: state.round.multiplier, label: landlordWon ? '春天' : '反春' });
   broadcastAction(ctx, 'roundSettled', { actorId: winnerId, value: state.round.multiplier, label: landlordWon ? '地主胜利' : '农民胜利' });
   ctx.broadcast('game:notice', { message: landlordWon ? '地主胜利' : '农民胜利' });
+  setGameJoinable(ctx, true); // 进入结算，允许补人 / 准备下一局
+}
+
+/**
+ * 局中（bidding/playing）发生中途退出 → 本局作废、不计分。
+ * 状态结构与 settleRound 对齐（phase=settlement + result）以便 UI 复用结算面板。
+ * 注意：此时 caller 已经把退出的玩家从 seats/players/handCounts/hands 里清掉，
+ *       剩余玩家 < 3，需要补人或退出后才能再开新局（canPrepare 拒绝非 3 人点准备）。
+ */
+function voidRound(ctx: RoomContext<GameState>, leaverName: string) {
+  const state = ctx.state;
+  for (const player of allPlayers(state)) {
+    player.ready = false;
+    player.role = null;
+  }
+  state.dealer = null;
+  state.landlordCardsVisible = [];
+  state.currentPlayerId = null;
+  state.bidState = null;
+  state.lastPlay = null;
+  state.playedCards = [];
+  state.handCounts = {};
+  state.result = {
+    winnerTeam: 'landlord',
+    winnerIds: [],
+    deltas: {},
+    spring: false,
+    multiplier: 1,
+  };
+  state.rejoinDeadline = null;
+  state.phase = 'settlement';
+  state.message = `${leaverName} 离开，本局流局`;
+  hands = {};
+  landlordCardsHidden = [];
+  ctx.broadcast('game:notice', { message: state.message });
+  setGameJoinable(ctx, true); // 流局回到结算，允许补人
 }
 
 function resetRoundPublicState(state: GameState, message: string) {
@@ -333,6 +360,7 @@ function resetRoundPublicState(state: GameState, message: string) {
   state.playedCards = [];
   state.handCounts = {};
   state.result = null;
+  state.rejoinDeadline = null;
   state.message = message;
   for (const player of allPlayers(state)) {
     player.ready = false;
@@ -356,6 +384,65 @@ function nextPlayerId(state: GameState, playerId: string) {
   const player = state.players[playerId];
   const nextSeat = (player.seat + 1) % 3;
   return state.seats[nextSeat] ?? playerId;
+}
+
+/**
+ * 在 bidding 阶段为 playerId 提交一个叫分。校验必须由调用方负责（player、score 合法性）。
+ * 既被 actions.bid 调用，也被 setTimer('rejoin:<id>', ...) 自动托管时调用。
+ */
+function applyBid(ctx: RoomContext<GameState>, playerId: string, score: number) {
+  const state = ctx.state;
+  if (state.phase !== 'bidding' || state.bidState?.currentPlayerId !== playerId) return;
+  if (!state.players[playerId]) return;
+  const bid = state.bidState;
+  bid.turns += 1;
+  if (score === 0) {
+    if (!bid.passed.includes(playerId)) bid.passed.push(playerId);
+  } else {
+    bid.highestScore = score;
+    bid.highestPlayerId = playerId;
+  }
+
+  ctx.broadcast('game:notice', { message: `${state.players[playerId].name}${score === 0 ? '不叫' : `叫 ${score} 分`}` });
+  broadcastAction(ctx, 'bidPlaced', { actorId: playerId, value: score, label: score === 0 ? '不叫' : `叫 ${score} 分` });
+  state.rejoinDeadline = null;
+
+  if (score === 3 || bid.turns >= 3) {
+    if (!bid.highestPlayerId) {
+      ctx.broadcast('game:notice', { message: '无人叫地主，重新发牌' });
+      startRound(ctx);
+      return;
+    }
+    beginPlaying(ctx, bid.highestPlayerId, bid.highestScore);
+    return;
+  }
+
+  bid.currentPlayerId = nextPlayerId(state, playerId);
+}
+
+/**
+ * 在 playing 阶段为 playerId 提交一次"不出"。调用方需保证：
+ * - 当前轮到 playerId（currentPlayerId === playerId）
+ * - 当前是"跟牌"（lastPlay 存在且 lastPlay.playerId !== playerId）
+ * 首出场景的"弃权一轮"在 onLeave 的 timer 回调里直接处理（不走本函数）。
+ */
+function applyPass(ctx: RoomContext<GameState>, playerId: string) {
+  const state = ctx.state;
+  if (state.phase !== 'playing' || state.currentPlayerId !== playerId) return;
+  if (!state.lastPlay || state.lastPlay.playerId === playerId) return;
+
+  state.playedCards.push({ playerId, pass: true });
+  broadcastAction(ctx, 'playerPassed', { actorId: playerId, label: '不出' });
+  state.round.passCount += 1;
+  state.rejoinDeadline = null;
+  if (state.round.passCount >= 2) {
+    state.currentPlayerId = state.lastPlay.playerId;
+    state.lastPlay = null;
+    state.round.passCount = 0;
+    broadcastAction(ctx, 'trickCleared', { actorId: state.currentPlayerId });
+    return;
+  }
+  state.currentPlayerId = nextPlayerId(state, playerId);
 }
 
 function sendHand(ctx: RoomContext<GameState>, playerId: string) {

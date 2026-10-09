@@ -23,6 +23,7 @@ my-room/
 | [example-tic-tac-toe.md](./example-tic-tac-toe.md) | 从零写一个完整井字棋，可直接复制运行 | 想要可抄的完整范例 |
 | [worker-api.md](./worker-api.md) | `defineRoom` / `ctx` / 生命周期 / action 完整参考 | 写房间逻辑时查 |
 | [client-api.md](./client-api.md) | 全局 `parti.*` UI API 完整参考 | 写房间 UI 时查 |
+| [room-admission.md](./room-admission.md) | 游戏何时允许新玩家加入 + 断线重连策略（常开制 / 锁门制 / 半锁制），worker 何时广播 `game:joinable-changed` | 写游戏逻辑**前**先看，决定你的游戏选哪种策略 |
 | [manifest.md](./manifest.md) | `parti.room.json` 字段表 | 配置清单时查 |
 | [agent-access.md](./agent-access.md) | 让游戏适配 AI 接入与无障碍：写好 `parti.exposeToAgent` 转述、省 token、复用为读屏说明（附接入 / 消费链路与 `window.__partiAgent` 契约） | 想让 AI 更好地玩你的房间、或做无障碍时读 |
 | [room-dev-harness.md](./room-dev-harness.md) | 仓库内 `room-*` / `template-*` 打包与 Harness 接入 | 在本仓库新建或修改 Room 应用时读 |

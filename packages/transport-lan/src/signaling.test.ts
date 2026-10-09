@@ -37,7 +37,7 @@ describe('LAN signaling discovery', () => {
         peer('native', 'native-token'),
         peer('host-signal', encodeLanPeerToken({
           role: 'host', instanceId: 'host-instance', hostId: 'stable-host', roomId: 'counter',
-          announcement: { title: 'LAN Counter', packageName: 'Counter', playerCount: 1, maxPlayers: 4, joinable: true, credentialRequired: false },
+          announcement: { title: 'LAN Counter', packageName: 'Counter', playerCount: 1, maxPlayers: 4, joinable: true, gameJoinable: true, credentialRequired: false },
         })),
       ],
     });
@@ -87,11 +87,11 @@ describe('LAN signaling discovery', () => {
       peers: [
         peer('old-peer', encodeLanPeerToken({
           role: 'host', instanceId: 'old', hostId: 'stable-host', roomId: 'counter',
-          announcement: { title: 'Old', packageName: 'Counter', playerCount: 1, maxPlayers: 4, joinable: true, credentialRequired: false },
+          announcement: { title: 'Old', packageName: 'Counter', playerCount: 1, maxPlayers: 4, joinable: true, gameJoinable: true, credentialRequired: false },
         })),
         peer('new-peer', encodeLanPeerToken({
           role: 'host', instanceId: 'new', hostId: 'stable-host', roomId: 'counter',
-          announcement: { title: 'Current', packageName: 'Counter', playerCount: 2, maxPlayers: 4, joinable: true, credentialRequired: false },
+          announcement: { title: 'Current', packageName: 'Counter', playerCount: 2, maxPlayers: 4, joinable: true, gameJoinable: true, credentialRequired: false },
         })),
       ],
     });

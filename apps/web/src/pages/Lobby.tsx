@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
-import { CloudIcon, PlusIcon, SparklesIcon } from 'lucide-react';
+import { CloudIcon, PlusIcon, SparklesIcon, WifiIcon, WifiOffIcon } from 'lucide-react';
+import {
+  subscribeLanRooms,
+  type LanDiscoveredRoom,
+  type LanDiscoveryStatus,
+} from '@parti/transport-lan';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,13 +18,33 @@ import {
   type LobbyRoom,
 } from '../lib/lobbyApi';
 import { buildJoinHashRoute, navigateToPeerJoin } from '../lib/peerRoutes';
+import { loadLocalUser } from '../lib/localUser';
 import { ENABLE_REPLAYS } from '../lib/featureFlags';
+import {
+  getLanDiscoveryConfig,
+  TRANSPORT_PROFILES_CHANGED_EVENT,
+  type TransportConfig,
+} from '../lib/transportConfig';
 
 /** 面向玩家的在线大厅。创作草稿与开发预览不在这里展示。 */
 export function Lobby() {
   const intl = useIntl();
   const [online, setOnline] = useState<LobbyRoom[]>([]);
   const [onlineStatus, setOnlineStatus] = useState<'loading' | 'ready' | 'offline'>('loading');
+  const [lanRooms, setLanRooms] = useState<LanDiscoveredRoom[]>([]);
+  const [lanStatus, setLanStatus] = useState<LanDiscoveryStatus>('connecting');
+  const [lanConfig, setLanConfig] = useState(() => getLanDiscoveryConfig());
+  const lanServerUrl = lanConfig.serverUrl;
+
+  useEffect(() => {
+    const refreshConfig = () => setLanConfig(getLanDiscoveryConfig());
+    window.addEventListener(TRANSPORT_PROFILES_CHANGED_EVENT, refreshConfig);
+    window.addEventListener('storage', refreshConfig);
+    return () => {
+      window.removeEventListener(TRANSPORT_PROFILES_CHANGED_EVENT, refreshConfig);
+      window.removeEventListener('storage', refreshConfig);
+    };
+  }, []);
 
   useEffect(() => {
     const baseUrl = lobbyServiceUrl();
@@ -28,9 +53,10 @@ export function Lobby() {
       return;
     }
     const client = new LobbyClient(baseUrl);
+    const viewerClientId = loadLocalUser().id;
     const refresh = () => {
       client
-        .listRooms()
+        .listRooms({ viewerClientId })
         .then((rooms) => {
           setOnline(rooms);
           setOnlineStatus('ready');
@@ -42,12 +68,24 @@ export function Lobby() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    setLanStatus('connecting');
+    const subscription = subscribeLanRooms({
+      ...(lanServerUrl ? { serverUrl: lanServerUrl } : {}),
+      onRooms: setLanRooms,
+      onStatus: setLanStatus,
+    });
+    return () => subscription.close();
+  }, [lanServerUrl]);
+
   const emptyState =
-    'flex min-h-[210px] flex-col items-center justify-center gap-1 rounded-[20px] border border-dashed border-border-strong bg-surface/75 p-8 text-center text-muted-foreground';
+    'flex min-h-[250px] flex-col items-center justify-center gap-1 rounded-[22px] border border-dashed border-border-strong bg-surface/75 p-9 text-center text-muted-foreground';
+  // 局域网有房间时用 order 提到前面，JSX 结构保持不变。
+  const preferLan = lanRooms.length > 0;
 
   return (
-    <div className="mx-auto w-[min(1120px,100%)]">
-      <section className="relative mb-8 flex min-h-[240px] items-end justify-between gap-8 overflow-hidden rounded-[24px] border border-border bg-[linear-gradient(115deg,rgba(255,215,64,0.42),rgba(255,253,247,0.94)_52%,rgba(255,235,143,0.32)),var(--surface)] p-10 shadow-soft max-md:min-h-[300px] max-md:flex-col max-md:items-start max-md:justify-end max-md:rounded-[20px] max-md:p-6">
+    <div className="mx-auto w-[min(1240px,100%)]">
+      <section className="relative mb-[42px] flex min-h-[260px] items-end justify-between gap-8 overflow-hidden rounded-[28px] border border-border bg-[linear-gradient(115deg,rgba(255,215,64,0.42),rgba(255,253,247,0.94)_52%,rgba(255,235,143,0.32)),var(--surface)] p-12 shadow-soft max-md:min-h-[310px] max-md:flex-col max-md:items-start max-md:justify-end max-md:rounded-[22px] max-md:p-7">
         <span
           aria-hidden="true"
           className="pointer-events-none absolute top-[-65%] right-[7%] size-[310px] rounded-full border-[55px] border-[rgba(199,153,0,0.08)]"
@@ -80,9 +118,9 @@ export function Lobby() {
         </div>
       </section>
 
-      <div className="flex flex-col gap-8">
-        <section>
-          <div className="mb-4 flex items-center justify-between">
+      <div className="flex flex-col gap-10">
+        <section className={preferLan ? 'order-2' : 'order-1'}>
+          <div className="mb-[18px] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <span className="size-2 rounded-full bg-success shadow-[0_0_0_5px_rgba(81,219,147,0.11)]" />
               <h2 className="text-xl font-semibold"><FormattedMessage id="lobby.live.title" /></h2>
@@ -110,7 +148,7 @@ export function Lobby() {
             </Card>
           )}
           {online.length > 0 && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
               {online.map((room) => (
                 <Card
                   className="gap-3 rounded-[18px] border-border bg-[linear-gradient(145deg,var(--surface-2),var(--surface))] py-5 shadow-[0_14px_35px_rgba(91,72,15,0.08)]"
@@ -128,9 +166,9 @@ export function Lobby() {
                         : intl.formatMessage({ id: 'lobby.room.playersCapacity' }, { current: room.playerCount, max: room.maxPlayers })}
                     </span>
                     <Button
-                      disabled={!room.joinable}
+                      // 满员时，仅允许最近掉线的原玩家重新进入。
+                      disabled={!room.joinable && !room.selfRejoinable}
                       onClick={() => {
-                        if (!room.joinable) return;
                         const connectionInfo = room.connectionInfo ?? room.hostPeerId;
                         if (!connectionInfo) return;
                         navigateToPeerJoin(buildJoinHashRoute(room.roomId, connectionInfo, undefined, room.transportConfig ?? { adapter: 'peerjs' }));
@@ -138,6 +176,8 @@ export function Lobby() {
                     >
                       {room.joinable ? (
                         <FormattedMessage id="lobby.room.join" />
+                      ) : room.selfRejoinable ? (
+                        <FormattedMessage id="lobby.room.joinGame" />
                       ) : (
                         <FormattedMessage id="lobby.room.full" />
                       )}
@@ -148,7 +188,86 @@ export function Lobby() {
             </div>
           )}
         </section>
+
+        <section className={preferLan ? 'order-1' : 'order-2'}>
+          <div className="mb-[18px] flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <WifiIcon className="size-4 text-primary-bright" aria-hidden="true" />
+              <h2 className="text-xl font-semibold"><FormattedMessage id="lobby.lan.title" /></h2>
+            </div>
+            {lanStatus === 'ready' && (
+              <span className="text-xs text-muted-foreground">
+                {intl.formatMessage({ id: 'lobby.live.roomCount' }, { count: lanRooms.length })}
+              </span>
+            )}
+          </div>
+
+          {lanStatus === 'connecting' && <div className={emptyState}><FormattedMessage id="lobby.lan.loading" /></div>}
+          {lanStatus === 'offline' && (
+            <Card className={emptyState}>
+              <WifiOffIcon className="size-12 rounded-2xl bg-secondary p-3 text-primary-bright" aria-hidden="true" />
+              <h3 className="mt-3 mb-[7px] text-[19px] font-semibold text-foreground"><FormattedMessage id="lobby.lan.offlineTitle" /></h3>
+              <p className="mb-[18px]"><FormattedMessage id="lobby.lan.offlineDescription" /></p>
+            </Card>
+          )}
+          {lanRooms.length === 0 && lanStatus === 'ready' && (
+            <Card className={emptyState}>
+              <WifiIcon className="size-12 rounded-2xl bg-secondary p-3 text-primary-bright" aria-hidden="true" />
+              <h3 className="mt-3 mb-[7px] text-[19px] font-semibold text-foreground"><FormattedMessage id="lobby.lan.emptyTitle" /></h3>
+              <p className="mb-[18px]"><FormattedMessage id="lobby.lan.emptyDescription" /></p>
+            </Card>
+          )}
+          {lanRooms.length > 0 && (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+              {lanRooms.map((room) => (
+                <RoomCard
+                  key={`${room.hostId}:${room.roomId}`}
+                  room={room}
+                  transportConfig={lanConfig}
+                  connectionInfo={room.hostId}
+                />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
+  );
+}
+
+function RoomCard({
+  room,
+  transportConfig,
+  connectionInfo,
+}: {
+  room: Pick<LobbyRoom, 'roomId' | 'title' | 'packageName' | 'playerCount' | 'maxPlayers' | 'joinable' | 'credentialRequired'>;
+  transportConfig: TransportConfig;
+  connectionInfo: string;
+}) {
+  const intl = useIntl();
+  return (
+    <Card className="gap-3 rounded-[18px] border-border bg-[linear-gradient(145deg,var(--surface-2),var(--surface))] py-5 shadow-[0_14px_35px_rgba(91,72,15,0.08)]">
+      <CardHeader className="flex items-start justify-between gap-3 px-5">
+        <div><CardTitle className="text-lg">{room.title}</CardTitle><CardDescription className="mt-1">{room.packageName}</CardDescription></div>
+        {room.credentialRequired && <Badge variant="secondary"><FormattedMessage id="lobby.room.passwordRequired" /></Badge>}
+      </CardHeader>
+      <CardFooter className="bg-transparent border-none flex items-center justify-between gap-3 p-2">
+        <span className="text-xs text-muted-foreground">
+          <span aria-hidden="true" className="text-[8px] text-success">●</span>{' '}
+          {room.maxPlayers === null
+            ? intl.formatMessage({ id: 'lobby.room.playersOnline' }, { count: room.playerCount })
+            : intl.formatMessage({ id: 'lobby.room.playersCapacity' }, { current: room.playerCount, max: room.maxPlayers })}
+        </span>
+        <Button
+          disabled={!room.joinable}
+          onClick={() => {
+            if (!room.joinable) return;
+            navigateToPeerJoin(buildJoinHashRoute(room.roomId, connectionInfo, undefined, transportConfig));
+          }}
+        >
+          <FormattedMessage id={room.joinable ? 'lobby.room.join' : 'lobby.room.full'} />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
