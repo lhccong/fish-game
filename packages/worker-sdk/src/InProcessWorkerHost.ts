@@ -23,7 +23,13 @@ export class InProcessWorkerHost implements RoomWorkerHost {
   async init(options: WorkerInitOptions): Promise<void> {
     const effects: EngineEffects = {
       onState: (state) => this.callbacks?.onState(state),
-      onBroadcast: (event, payload) => this.callbacks?.onBroadcast(event, payload),
+      onBroadcast: (event, payload) => {
+        if (event === 'game:joinable-changed') {
+          this.callbacks?.onJoinableChange(Boolean(payload));
+          return;
+        }
+        this.callbacks?.onBroadcast(event, payload);
+      },
       onSend: (playerId, event, payload) =>
         this.callbacks?.onSend(playerId, event, payload),
       onKick: (playerId, reason) => this.callbacks?.onKick(playerId, reason),

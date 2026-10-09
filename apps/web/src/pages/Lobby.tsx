@@ -18,6 +18,7 @@ import {
   type LobbyRoom,
 } from '../lib/lobbyApi';
 import { buildJoinHashRoute, navigateToPeerJoin } from '../lib/peerRoutes';
+import { loadLocalUser } from '../lib/localUser';
 import { ENABLE_REPLAYS } from '../lib/featureFlags';
 import {
   getLanDiscoveryConfig,
@@ -52,9 +53,10 @@ export function Lobby() {
       return;
     }
     const client = new LobbyClient(baseUrl);
+    const viewerClientId = loadLocalUser().id;
     const refresh = () => {
       client
-        .listRooms()
+        .listRooms({ viewerClientId })
         .then((rooms) => {
           setOnline(rooms);
           setOnlineStatus('ready');
@@ -164,9 +166,11 @@ export function Lobby() {
                         : intl.formatMessage({ id: 'lobby.room.playersCapacity' }, { current: room.playerCount, max: room.maxPlayers })}
                     </span>
                     <Button
-                      disabled={!room.joinable}
+                      // lobby 按钮：满员时只在自己是 30s 内的局中退出者时仍可点
+                      // (selfRejoinable=true)，文案"加入游戏"；否则 disabled 文案
+                      // "房间已满"。未满时永远 enabled + "加入房间"。
+                      disabled={!room.joinable && !room.selfRejoinable}
                       onClick={() => {
-                        if (!room.joinable) return;
                         const connectionInfo = room.connectionInfo ?? room.hostPeerId;
                         if (!connectionInfo) return;
                         navigateToPeerJoin(buildJoinHashRoute(room.roomId, connectionInfo, undefined, room.transportConfig ?? { adapter: 'peerjs' }));
@@ -174,6 +178,8 @@ export function Lobby() {
                     >
                       {room.joinable ? (
                         <FormattedMessage id="lobby.room.join" />
+                      ) : room.selfRejoinable ? (
+                        <FormattedMessage id="lobby.room.joinGame" />
                       ) : (
                         <FormattedMessage id="lobby.room.full" />
                       )}
@@ -236,7 +242,7 @@ function RoomCard({
   transportConfig,
   connectionInfo,
 }: {
-  room: Pick<LobbyRoom, 'roomId' | 'title' | 'packageName' | 'playerCount' | 'maxPlayers' | 'joinable' | 'credentialRequired'>;
+  room: Pick<LobbyRoom, 'roomId' | 'title' | 'packageName' | 'playerCount' | 'maxPlayers' | 'joinable' | 'gameJoinable' | 'selfRejoinable' | 'credentialRequired'>;
   transportConfig: TransportConfig;
   connectionInfo: string;
 }) {
@@ -244,8 +250,19 @@ function RoomCard({
   return (
     <Card className="gap-3 rounded-[18px] border-border bg-[linear-gradient(145deg,var(--surface-2),var(--surface))] py-5 shadow-[0_14px_35px_rgba(91,72,15,0.08)]">
       <CardHeader className="flex items-start justify-between gap-3 px-5">
-        <div><CardTitle className="text-lg">{room.title}</CardTitle><CardDescription className="mt-1">{room.packageName}</CardDescription></div>
-        {room.credentialRequired && <Badge variant="secondary"><FormattedMessage id="lobby.room.passwordRequired" /></Badge>}
+        <div>
+          <CardTitle className="text-lg">{room.title}</CardTitle>
+          <CardDescription className="mt-1">{room.packageName}</CardDescription>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* 房间状态标签：与"加入"按钮分离，仅作状态描述。 */}
+          {!room.gameJoinable && (
+            <Badge variant="outline">
+              <FormattedMessage id="lobby.room.inGame" />
+            </Badge>
+          )}
+          {room.credentialRequired && <Badge variant="secondary"><FormattedMessage id="lobby.room.passwordRequired" /></Badge>}
+        </div>
       </CardHeader>
       <CardFooter className="bg-transparent border-none flex items-center justify-between gap-3 p-2">
         <span className="text-xs text-muted-foreground">
@@ -255,9 +272,10 @@ function RoomCard({
             : intl.formatMessage({ id: 'lobby.room.playersCapacity' }, { current: room.playerCount, max: room.maxPlayers })}
         </span>
         <Button
+          // LAN 列表没有 selfRejoinable 概念（不走 lobby server）：
+          // 满员即 disabled，未满即可点。玩家也可从 host 拿直接链接加入。
           disabled={!room.joinable}
           onClick={() => {
-            if (!room.joinable) return;
             navigateToPeerJoin(buildJoinHashRoute(room.roomId, connectionInfo, undefined, transportConfig));
           }}
         >

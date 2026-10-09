@@ -127,6 +127,98 @@ ctx.clearTimer('round');
 
 `ctx.kick(playerId, reason?)`——把玩家移出房间。
 
+### 房间状态与准入控制（`game:joinable-changed`）
+
+`ctx.broadcast` 的事件名 `game:joinable-changed` 是**协议保留事件**，Runtime
+会拦截并用于控制**是否有新玩家能在当前阶段加入**（大堂列表显示、host 端
+`assertAdmission` 判定都走它）。约定 payload 为 `boolean`：
+
+```js
+// 例：斗地主 — 进入发牌阶段锁门
+ctx.broadcast('game:joinable-changed', false);
+// 例：结算/流局回 ready 时开门
+ctx.broadcast('game:joinable-changed', true);
+```
+
+#### 三种典型策略
+
+| 策略 | 何时发 `false` | 何时发 `true` | 断线重连语义 | 例子 |
+| --- | --- | --- | --- | --- |
+| **锁门制**（回合制短局）| 局中（出牌/叫地主阶段）| 局前/结算 | 局中掉线保留 30s 让稳定身份重连 | 斗地主 |
+| **常开制**（休闲 IO）| 从不 | 始终保持默认值 true | 断线立即清，座位空出来就能补 | 贪吃蛇 |
+| **半锁制**（长局卡牌）| 长局进行中 | 局前/每局结算/重开局 | 局中掉线保留 30s；结算时补人 | 三人麻将 |
+
+#### 默认值 & 何时不调
+
+- **Runtime 默认 `gameJoinable = true`**，且 worker 不发事件就永远是 true。
+- 常开制游戏（贪吃蛇、谁是卧底、画猜）**根本不需要在 worker 里发这个事件**——
+  任何时候新人都能补，座位满则大堂列表自动 disabled "房间已满"。
+- 锁门制游戏（斗地主、麻将、UNO 类）**必须**在状态机每个阶段显式广播，
+  否则会出现"局中新人加进来"或"局后新人被卡在门外"的 bug。
+
+#### 锁门制样板（斗地主）
+
+```js
+function setGameJoinable(joinable) {
+  ctx.broadcast('game:joinable-changed', joinable);
+}
+
+onJoin(ctx, player) {
+  // ... 入座逻辑
+  if (Object.keys(ctx.state.players).length === 3) {
+    ctx.state.phase = 'ready';
+  }
+},
+
+// 进入出牌阶段 → 锁门
+startRound(ctx) {
+  setGameJoinable(false);
+  // ...
+},
+
+// 结算完成 → 开门
+onRoundSettled(ctx) {
+  setGameJoinable(true);
+  // ...
+},
+
+// 中途有人掉线 / 退到非满员 → 也要开门
+onLeave(ctx, player) {
+  // ... 清理座位
+  if (playersCount < maxPlayers) {
+    setGameJoinable(true); // 显式开门，避免 gameJoinable 残留在 false
+  }
+},
+```
+
+#### 断线重连 vs 一断就清——自动按 gameJoinable 决定
+
+worker **不需要**自己处理 `onDisconnect` / 30s 宽限逻辑。HostRuntime 会按
+`gameJoinable` 自动决定：
+
+- `gameJoinable = true` 时某玩家掉线 → Runtime 立即清掉他（"一断就清"）
+- `gameJoinable = false` 时某玩家掉线 → Runtime 保留 30s 让其凭 `clientId` 重连
+
+> 决定这两种行为的是 **`gameJoinable` 当前值**，不是 worker 显式调某个 API。
+> 所以常开制游戏**自动**就是"一断就清"，锁门制游戏**自动**就是"30s 重连"。
+
+#### 大堂列表与按钮行为（`apps/web` 侧）
+
+Runtime 的 `getAdmissionStatus` 把"游戏是否允许新加入"和"是否满员"两个维度分开：
+
+- `joinable = reservedPlayers < maxPlayers && gameJoinable`
+- `gameJoinable` 单独暴露给前端
+
+`apps/web` 的大堂列表条目据此显示：
+
+- 满员 + 你是 30s 内局中掉线者（凭 `clientId`）→ "**加入游戏**"按钮 enabled
+- 满员 + 别人 / 新人 → "房间已满" disabled
+- 未满 → "加入房间" enabled
+- `gameJoinable=false` 会在卡片标题旁显示"**游戏中**"标签
+
+详细的大堂与重连协议见 [`host-runtime.md`](./host-runtime.md) 和
+[`lobby-service.md`](./lobby-service.md)。
+
 ## 4. Action Handler
 
 ```ts

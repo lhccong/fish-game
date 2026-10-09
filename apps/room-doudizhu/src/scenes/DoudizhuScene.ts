@@ -50,6 +50,8 @@ export class DoudizhuScene {
   private pixelRatio = 1;
   private animations = new DoudizhuAnimationQueue();
   private activeAnimation: (DoudizhuAnimation & { progress: number }) | null = null;
+  /** Runtime 派发 __error 时的致命提示，渲染时画全屏遮罩。null = 不显示。 */
+  private fatalError: string | null = null;
 
   init() {
     this.disposers.push(
@@ -68,6 +70,14 @@ export class DoudizhuScene {
         this.showFlash((payload as { message: string }).message);
       }),
       parti.onEvent('game:action', (payload) => this.receiveAction(payload)),
+      parti.onEvent('__error', (payload) => {
+        // Runtime 派发的致命事件，参见 docs/protocol-reference.md。
+        const p = (payload ?? {}) as { code?: string; message?: string };
+        if (p.code === 'HOST_CLOSED') this.fatalError = '房主已断开，房间已关闭';
+        else if (p.code === 'RUNTIME_ERROR') this.fatalError = `房间出错：${p.message ?? '未知错误'}`;
+        else if (p.code === 'KICKED') this.fatalError = `你已被移出房间：${p.message ?? ''}`;
+        else if (p.message) this.showFlash(`[${p.code ?? 'error'}] ${p.message}`);
+      }),
     );
 
     window.addEventListener('pagehide', this.destroy, { once: true });
@@ -120,6 +130,12 @@ export class DoudizhuScene {
     this.fillRect(0, 0, width, height, TABLE);
     this.drawVignette(width, height);
 
+    if (this.fatalError) {
+      this.drawFatalOverlay(width, height);
+      context.restore();
+      return;
+    }
+
     if (!this.state) {
       this.centerText('正在连接房间...', width, height / 2);
       context.restore();
@@ -155,6 +171,23 @@ export class DoudizhuScene {
     const major = event.kind === 'dealStarted' || event.kind === 'landlordAssigned' || event.kind === 'roundSettled';
     const blocksInput = major || event.kind === 'cardsPlayed' || event.kind === 'playerPassed';
     this.animations.enqueue({ ...event, id: event.actionId, kind: event.kind, duration: major ? 1050 : event.kind === 'cardsPlayed' ? 560 : 420, blocking: blocksInput } as DoudizhuAnimation);
+  }
+
+  private drawFatalOverlay(width: number, height: number) {
+    const context = mainContext;
+    context.save();
+    context.fillStyle = 'rgba(4, 8, 12, 0.78)';
+    context.fillRect(0, 0, width, height);
+    context.restore();
+
+    const boxW = Math.min(560, width - 80);
+    const boxH = 200;
+    const x = (width - boxW) / 2;
+    const y = (height - boxH) / 2;
+    this.panel(x, y, boxW, boxH, '#1a0606', '#b91c1c', 0.96);
+    this.centerText('房间已结束', width, y + 30, 24, '#fecaca', 700);
+    this.wrappedText(x + 32, y + 78, this.fatalError ?? '', boxW - 64, 16, '#fee2e2');
+    this.centerText('请使用页面右上角的「退出并返回大厅」按钮离开房间', width, y + boxH - 32, 14, '#fecaca');
   }
 
   private drawVignette(width: number, height: number) {
@@ -205,10 +238,15 @@ export class DoudizhuScene {
       const height = 74;
       const x = pos.x - width / 2;
       const y = pos.y - height / 2;
+      const offline = !player.connected;
+      const fill = offline ? '#3a1010' : isTurn ? '#1d7d5f' : PANEL;
+      const stroke = offline ? '#b91c1c' : isTurn ? GOLD : '#278262';
 
-      this.panel(x, y, width, height, isTurn ? '#1d7d5f' : PANEL, isTurn ? GOLD : '#278262', 0.92);
-      this.text(x + 16, y + 12, `${player.name}${isMe ? '（你）' : ''}`, 18, WHITE, 700);
-      this.text(x + 16, y + 40, this.playerSubtitle(player), 13, MUTED);
+      this.panel(x, y, width, height, fill, stroke, 0.92);
+      this.text(x + 16, y + 12, `${player.name}${isMe ? '（你）' : ''}`, 18, offline ? '#fecaca' : WHITE, 700);
+      const subtitle = this.playerSubtitle(player);
+      const offlineSuffix = offline ? this.offlineSuffix() : '';
+      this.text(x + 16, y + 40, subtitle + offlineSuffix, 13, offline ? '#fca5a5' : MUTED);
 
       const count = state.handCounts[player.id];
       if (index !== 0 && typeof count === 'number') this.drawCardBack(x + width - 56, y + 15, 32, 44, String(count));
@@ -483,9 +521,45 @@ export class DoudizhuScene {
   private phaseText(state: GameState) {
     if (state.phase === 'waiting') return state.message || '等待玩家加入';
     if (state.phase === 'ready') return '等待所有玩家准备';
-    if (state.phase === 'bidding') return `叫地主：当前 ${this.nameOf(state.bidState?.currentPlayerId ?? '')}`;
-    if (state.phase === 'playing') return `出牌阶段：轮到 ${this.nameOf(state.currentPlayerId ?? '')}`;
+    if (state.phase === 'bidding') {
+      const curId = state.bidState?.currentPlayerId ?? '';
+      const cur = state.players[curId];
+      if (cur && !cur.connected) {
+        const secs = this.rejoinSecondsLeft(state);
+        return `叫地主：${this.nameOf(curId)} 已离线${secs !== null ? `，${secs} 秒后自动跳过` : '，等待重连'}`;
+      }
+      return `叫地主：当前 ${this.nameOf(curId)}`;
+    }
+    if (state.phase === 'playing') {
+      const curId = state.currentPlayerId ?? '';
+      const cur = state.players[curId];
+      if (cur && !cur.connected) {
+        const secs = this.rejoinSecondsLeft(state);
+        return `出牌阶段：${this.nameOf(curId)} 已离线${secs !== null ? `，${secs} 秒后自动跳过` : '，等待重连'}`;
+      }
+      return `出牌阶段：轮到 ${this.nameOf(curId)}`;
+    }
     return '本局结算完成，准备后开始下一局';
+  }
+
+  /**
+   * 当前轮到的人离线时，离 30s 自动托管还剩多少秒。仅在 state.rejoinDeadline 仍指向"轮到的那个人"时返回正整数。
+   * 否则返回 null，让 phaseText / agent 转述走"等待重连"措辞。
+   */
+  private rejoinSecondsLeft(state: GameState): number | null {
+    const deadline = state.rejoinDeadline;
+    if (typeof deadline !== 'number') return null;
+    const curId = state.currentPlayerId ?? state.bidState?.currentPlayerId ?? null;
+    if (!curId) return null;
+    const cur = state.players[curId];
+    if (!cur || cur.connected) return null;
+    return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  }
+
+  private offlineSuffix(): string {
+    if (!this.state) return '';
+    const secs = this.rejoinSecondsLeft(this.state);
+    return secs !== null ? ` · ${secs}s` : '';
   }
 
   private playerSubtitle(player: PlayerState) {
@@ -583,8 +657,11 @@ function buildDoudizhuGuide(state: GameState | null, hand: Card[], playerId: str
   if (state.phase === 'bidding') {
     const bid = state.bidState;
     if (!bid || bid.currentPlayerId !== playerId) {
-      const cur = bid?.currentPlayerId ? state.players[bid.currentPlayerId]?.name ?? '其他玩家' : '其他玩家';
-      return { ...g, phase: 'bidding', narrative: `${base} 当前最高分 ${bid?.highestScore ?? 0}，轮到 ${cur} 叫分。`, isYourTurn: false, availableActions: [], waitingFor: `等待 ${cur} 叫分` };
+      const curId = bid?.currentPlayerId ?? null;
+      const cur = curId ? state.players[curId] : null;
+      const curName = cur?.name ?? '其他玩家';
+      const offlineHint = cur && !cur.connected ? '（已离线，将自动跳过）' : '';
+      return { ...g, phase: 'bidding', narrative: `${base} 当前最高分 ${bid?.highestScore ?? 0}，轮到 ${curName}${offlineHint} 叫分。`, isYourTurn: false, availableActions: [], waitingFor: `等待 ${curName} 叫分` };
     }
     const scores = [0];
     for (let s = bid.highestScore + 1; s <= 3; s += 1) scores.push(s);
@@ -593,8 +670,11 @@ function buildDoudizhuGuide(state: GameState | null, hand: Card[], playerId: str
 
   if (state.phase === 'playing') {
     if (state.currentPlayerId !== playerId) {
-      const cur = state.currentPlayerId ? state.players[state.currentPlayerId]?.name ?? '其他玩家' : '其他玩家';
-      return { ...g, phase: 'playing', narrative: `${base} 轮到 ${cur} 出牌。`, isYourTurn: false, availableActions: [], waitingFor: `等待 ${cur} 出牌` };
+      const curId = state.currentPlayerId;
+      const cur = curId ? state.players[curId] : null;
+      const curName = cur?.name ?? '其他玩家';
+      const offlineHint = cur && !cur.connected ? '（已离线，将自动跳过）' : '';
+      return { ...g, phase: 'playing', narrative: `${base} 轮到 ${curName}${offlineHint} 出牌。`, isYourTurn: false, availableActions: [], waitingFor: `等待 ${curName} 出牌` };
     }
     const isLead = !state.lastPlay || state.lastPlay.playerId === playerId;
     const lastStr = state.lastPlay ? `${state.players[state.lastPlay.playerId]?.name ?? '?'} 出了 ${state.lastPlay.analysis.label}` : '无（你首出，可自由出牌）';

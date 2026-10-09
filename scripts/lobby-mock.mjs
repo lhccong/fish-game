@@ -175,6 +175,10 @@ const REQUIRED_FIELDS = [
   'credentialRequired',
 ];
 
+// playerClientIds 是可选字段，host 上报时附带，用于 lobby server 给 viewer
+// 算 selfRejoinable（让局中掉线的人能在 30s 内看到"加入游戏"按钮）。
+const OPTIONAL_FIELDS = ['gameJoinable', 'playerClientIds'];
+
 const FORBIDDEN_KEYS = ['password', 'credential', 'token', 'authorization', 'secret'];
 
 function validateInput(input) {
@@ -207,6 +211,18 @@ function validateInput(input) {
   }
   if (typeof input.joinable !== 'boolean') return 'joinable 必须是布尔';
   if (typeof input.credentialRequired !== 'boolean') return 'credentialRequired 必须是布尔';
+  if (input.gameJoinable !== undefined && typeof input.gameJoinable !== 'boolean') {
+    return 'gameJoinable 必须是布尔（可选）';
+  }
+  if (input.playerClientIds !== undefined) {
+    if (!Array.isArray(input.playerClientIds)) return 'playerClientIds 必须是字符串数组（可选）';
+    if (input.playerClientIds.length > 32) return 'playerClientIds 数量不能超过 32';
+    for (const id of input.playerClientIds) {
+      if (typeof id !== 'string' || id.length === 0 || id.length > 128) {
+        return 'playerClientIds 元素必须是非空字符串且不超过 128 字符';
+      }
+    }
+  }
   if (input.metadata !== undefined) {
     if (typeof input.metadata !== 'object' || input.metadata === null || Array.isArray(input.metadata)) {
       return 'metadata 必须是对象';
@@ -228,6 +244,8 @@ function makeEntry(input, listingId, createdAt) {
     playerCount: input.playerCount,
     maxPlayers: input.maxPlayers,
     joinable: input.joinable,
+    gameJoinable: input.gameJoinable ?? true,
+    playerClientIds: Array.isArray(input.playerClientIds) ? input.playerClientIds : [],
     credentialRequired: input.credentialRequired,
     metadata: input.metadata,
     createdAt,
@@ -269,9 +287,21 @@ const server = createHttpServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/v1/rooms') {
       cleanExpired();
+      // 可选查询参数 viewerClientId：调用方告知"我"的稳定 clientId，
+      // 服务端据此在每个条目上补充 selfRejoinable（用于 lobby 列表的"加入游戏"按钮）。
+      const viewerClientId = url.searchParams.get('viewerClientId') ?? null;
       const rooms = [];
       for (const { entry } of listings.values()) {
-        if (!isExpired(entry)) rooms.push(entry);
+        if (isExpired(entry)) continue;
+        const enriched = {
+          ...entry,
+          // 调用方没认领 clientId 时永远不点亮"加入游戏"按钮。
+          selfRejoinable: viewerClientId
+            ? Array.isArray(entry.playerClientIds)
+              && entry.playerClientIds.includes(viewerClientId)
+            : false,
+        };
+        rooms.push(enriched);
       }
       sendJson(res, 200, { rooms });
       return;

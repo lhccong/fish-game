@@ -14,6 +14,14 @@ export interface Player {
   name: string;
   role: PlayerRole;
   status: PlayerStatus;
+  /**
+   * 玩家离线时是否处于"游戏中宽限期"。
+   * - true：处于 bidding/playing 阶段掉线，保留 30s 宽限以等待重连，期间占用席位。
+   * - false：局前/局后掉线，不保留席位，新人立即可加入。
+   *
+   * 仅在 `status === 'offline'` 时有效；重连后会被清回 false。
+   */
+  midRoundOffline: boolean;
   avatar?: string;
   joinedAt: number;
 }
@@ -25,12 +33,13 @@ export class PlayerManager {
   private readonly byClient = new Map<string, string>();
 
   add(player: Player): Player {
-    this.players.set(player.id, player);
-    this.byPeer.set(player.peerId, player.id);
-    if (player.clientId) this.byClient.set(player.clientId, player.id);
-    return player;
+    // 调用方可以不显式传 midRoundOffline；这里默认 false。
+    const normalized: Player = { ...player, midRoundOffline: player.midRoundOffline ?? false };
+    this.players.set(normalized.id, normalized);
+    this.byPeer.set(normalized.peerId, normalized.id);
+    if (normalized.clientId) this.byClient.set(normalized.clientId, normalized.id);
+    return normalized;
   }
-
   remove(playerId: string): Player | undefined {
     const player = this.players.get(playerId);
     if (player) {
@@ -62,11 +71,22 @@ export class PlayerManager {
     this.byPeer.delete(player.peerId);
     player.peerId = newPeerId;
     this.byPeer.set(newPeerId, playerId);
+    // 重连回来后不再是"局中离线"，清回 false。
+    player.midRoundOffline = false;
   }
 
   setStatus(playerId: string, status: PlayerStatus): void {
     const player = this.players.get(playerId);
     if (player) player.status = status;
+  }
+
+  /**
+   * 标记玩家是否处于"游戏中宽限期"。仅在 `status === 'offline'` 时调用，
+   * 用于区分"局中保留席位 30s"与"局前立即释放席位"。
+   */
+  setMidRoundOffline(playerId: string, midRoundOffline: boolean): void {
+    const player = this.players.get(playerId);
+    if (player) player.midRoundOffline = midRoundOffline;
   }
 
   list(): Player[] {

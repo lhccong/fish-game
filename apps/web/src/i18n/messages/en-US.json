@@ -321,6 +321,7 @@
       "passwordAria": "4-digit room password",
       "passwordPlaceholder": "4-digit password",
       "wrongPassword": "Wrong password, please try again",
+      "gameInProgress": "Game in progress, cannot join right now",
       "join": "Join room",
       "exitAria": "Leave room",
       "exitTitle": "Back to lobby",

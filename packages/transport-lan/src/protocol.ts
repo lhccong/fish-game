@@ -13,6 +13,11 @@ export interface LanRoomAnnouncement {
   playerCount: number;
   maxPlayers: number | null;
   joinable: boolean;
+  /**
+   * 游戏逻辑侧是否允许新玩家加入。局中（bidding/playing）时为 false，但
+   * 同局内的稳定身份仍可走 host 端 handleHello 的 reconnect 路径。
+   */
+  gameJoinable: boolean;
   credentialRequired: boolean;
 }
 
@@ -84,6 +89,7 @@ function validAnnouncement(value: unknown): value is LanRoomAnnouncement {
     && room.playerCount! >= 0
     && (room.maxPlayers === null || (Number.isInteger(room.maxPlayers) && room.maxPlayers! > 0))
     && typeof room.joinable === 'boolean'
+    && typeof room.gameJoinable === 'boolean'
     && typeof room.credentialRequired === 'boolean';
 }
 

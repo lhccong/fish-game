@@ -19,5 +19,6 @@ export type WorkerToMain =
   | { kind: 'broadcast'; event: string; payload: unknown }
   | { kind: 'send'; playerId: string; event: string; payload: unknown }
   | { kind: 'kick'; playerId: string; reason: string | undefined }
+  | { kind: 'joinable-change'; joinable: boolean }
   | { kind: 'log'; args: unknown[] }
   | { kind: 'error'; error: { message: string; stack?: string } };

@@ -156,7 +156,9 @@
       "playersOnline": "{count} 人在线",
       "playersCapacity": "{current} / {max} 人",
       "join": "加入房间",
-      "full": "房间已满"
+      "joinGame": "加入游戏",
+      "full": "房间已满",
+      "inGame": "游戏中"
     },
     "status": {
       "publishing": "正在上架…",
@@ -321,6 +323,7 @@
       "passwordAria": "4 位房间密码",
       "passwordPlaceholder": "4 位数字密码",
       "wrongPassword": "密码错误，请重试",
+      "gameInProgress": "游戏进行中，暂不支持加入",
       "join": "加入房间",
       "exitAria": "退出房间",
       "exitTitle": "返回大厅",

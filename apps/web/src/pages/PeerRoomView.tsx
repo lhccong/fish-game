@@ -108,7 +108,7 @@ function PeerHostView({ roomId, transportConfig }: { roomId?: string; transportC
   } : {
     title: pkg.manifest.name,
     password: '',
-    isPublic: transportConfig.adapter === 'lan',
+    isPublic: true,
     replayEnabled: false,
   };
   return <PeerHostSession pkg={pkg} initialSettings={initialSettings} transportConfig={transportConfig} />;
@@ -209,7 +209,7 @@ function PeerHostSession({
           registerRoomDisposer(roomId, () => void publisher.unpublish());
           if (initialSettings.isPublic) {
             void publisher.publish(
-              lobbyInput(pkg, peerHost.hostPeerId, transportConfig, initialSettings, peerHost.host.getAdmissionStatus()),
+              lobbyInput(pkg, peerHost.hostPeerId, transportConfig, initialSettings, peerHost.host.getAdmissionStatus(), peerHost.host.players.list()),
             ).catch((reason) => {
               setLobbyError(reason instanceof Error ? reason.message : String(reason));
             });
@@ -227,7 +227,7 @@ function PeerHostSession({
           if (transportConfig.adapter === 'lan') {
             lanPublicationRef.current?.update(current.isPublic ? lanAnnouncement(pkg, current, status) : null);
           } else if (current.isPublic && publisherRef.current) {
-            void publisherRef.current.sync(lobbyInput(pkg, peerHost.hostPeerId, transportConfig, current, status));
+            void publisherRef.current.sync(lobbyInput(pkg, peerHost.hostPeerId, transportConfig, current, status, peerHost.host.players.list()));
           }
         });
       })
@@ -306,7 +306,7 @@ function PeerHostSession({
     const current = settingsRef.current;
     if (!current.isPublic) return;
     void publisherRef.current.sync(
-      lobbyInput(pkg, state.hostPeerId, transportConfig, current, state.host.getAdmissionStatus()),
+      lobbyInput(pkg, state.hostPeerId, transportConfig, current, state.host.getAdmissionStatus(), state.host.players.list()),
     );
     lastLobbySyncAtRef.current = Date.now();
   }
@@ -386,7 +386,7 @@ function PeerHostSession({
       });
       publisherRef.current = publisher;
       try {
-        await publisher.publish(lobbyInput(pkg, state.hostPeerId, transportConfig, settings, admission));
+        await publisher.publish(lobbyInput(pkg, state.hostPeerId, transportConfig, settings, admission, state.host.players.list()));
         lastLobbySyncAtRef.current = Date.now();
         applySettings({ ...settings, isPublic: true }, { skipLobbySync: true });
       } catch (reason) {
@@ -596,6 +596,8 @@ function PeerJoinView({
           setError(reason.code === 'INVALID_CREDENTIAL'
             ? intl.formatMessage({ id: 'peer.join.wrongPassword' })
             : null);
+        } else if (reason.code === 'GAME_IN_PROGRESS') {
+          setError(intl.formatMessage({ id: 'peer.join.gameInProgress' }));
         } else {
           setError(reason.message);
         }
@@ -685,7 +687,7 @@ function PeerJoinView({
   const shareControlsProps: RoomControlsProps = {
     settings: { title: state.roomTitle, password: credential, isPublic: false, replayEnabled: false },
     passwordDraft: credential,
-    admission: { activePlayers: 0, reservedPlayers: 0, maxPlayers: null, joinable: true },
+    admission: { activePlayers: 0, reservedPlayers: 0, maxPlayers: null, joinable: true, gameJoinable: true },
     lobbyStatus: 'private',
     lobbyError: null,
     visibilityMode: transportConfig.adapter === 'lan' ? 'lan' : 'online',
@@ -779,6 +781,7 @@ function lobbyInput(
   transportConfig: TransportConfig,
   settings: HostRoomSettings,
   admission: RoomAdmissionStatus,
+  players: Array<{ clientId?: string }> = [],
 ): LobbyRoomInput {
   return {
     roomId: pkg.manifest.id,
@@ -790,8 +793,24 @@ function lobbyInput(
     playerCount: admission.activePlayers,
     maxPlayers: admission.maxPlayers,
     joinable: admission.joinable,
+    gameJoinable: admission.gameJoinable,
+    playerClientIds: collectClientIds(players),
     credentialRequired: Boolean(settings.password),
   };
+}
+
+/** 从玩家列表里收集非空 clientId 数组（去重，保持原顺序）。 */
+function collectClientIds(players: Array<{ clientId?: string }>): string[] {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const p of players) {
+    const id = p.clientId;
+    if (typeof id !== 'string' || id.length === 0) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
 }
 
 function lanAnnouncement(
@@ -805,6 +824,7 @@ function lanAnnouncement(
     playerCount: admission.activePlayers,
     maxPlayers: admission.maxPlayers,
     joinable: admission.joinable,
+    gameJoinable: admission.gameJoinable,
     credentialRequired: Boolean(settings.password),
   };
 }

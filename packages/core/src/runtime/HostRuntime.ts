@@ -83,12 +83,18 @@ export class HostRuntime {
   private readonly opts: HostRuntimeOptions;
   private readonly transport: HostTransportSession;
   private readonly worker: RoomWorkerHost;
-  private readonly players = new PlayerManager();
+  /**
+   * 玩家注册表。readonly 仅指引用：内部 `add/remove/setStatus/rebindPeer`
+   * 仍会变更内部状态。对外只读，避免房间在运行时被外部篡改。
+   */
+  public readonly players: PlayerManager = new PlayerManager();
   private readonly sync = new StateSyncEngine();
   private readonly seq = new SeqCounter();
   private readonly createdAt = Date.now();
   /** 掉线玩家的宽限期定时器，key = playerId。 */
   private readonly graceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** 游戏逻辑控制：true = 允许新玩家加入（默认），false = 游戏中拒绝新加入。 */
+  private gameJoinable = true;
   /** 已持久化的状态版本，用于避免重复写盘。 */
   private lastPersistedVersion = -1;
   /** 是否已销毁；销毁后忽略一切入站/断线事件，避免把已清除的会话写回。 */
@@ -138,8 +144,12 @@ export class HostRuntime {
 
   getAdmissionStatus(): RoomAdmissionStatus {
     const players = this.players.list();
+    // 在线 = 不是 offline（connected / ready 都算在线）。
     const activePlayers = players.filter((p) => p.status !== 'offline').length;
-    const reservedPlayers = players.length;
+    // 占席位 = 在线 ∪ 局中宽限离线。局前/局后 offline 立即释放席位给新人。
+    const reservedPlayers = players.filter(
+      (p) => p.status !== 'offline' || p.midRoundOffline,
+    ).length;
     const configured = this.opts.maxPlayers;
     const maxPlayers =
       typeof configured === 'number' && Number.isFinite(configured) && configured > 0
@@ -149,7 +159,11 @@ export class HostRuntime {
       activePlayers,
       reservedPlayers,
       maxPlayers,
-      joinable: maxPlayers === null || reservedPlayers < maxPlayers,
+      joinable:
+        maxPlayers === null
+          ? this.gameJoinable
+          : reservedPlayers < maxPlayers && this.gameJoinable,
+      gameJoinable: this.gameJoinable,
     };
   }
 
@@ -167,6 +181,7 @@ export class HostRuntime {
       name: this.opts.hostName ?? 'Host',
       role: 'host',
       status: 'connected',
+      midRoundOffline: false,
       joinedAt: Date.now(),
     });
 
@@ -177,6 +192,7 @@ export class HostRuntime {
       onSend: (playerId, event, payload) =>
         this.handleSend(playerId, event, payload),
       onKick: (playerId, reason) => this.handleKick(playerId, reason),
+      onJoinableChange: (joinable) => this.handleJoinableChange(joinable),
       onLog: (args) => this.logs.emit(args),
       onError: (error) =>
         this.emitError({
@@ -210,6 +226,7 @@ export class HostRuntime {
           name: p.name,
           role: p.role,
           status: 'offline',
+          midRoundOffline: false,
           joinedAt: Date.now(),
         });
         this.scheduleGrace(offlinePlayer.id);
@@ -362,6 +379,7 @@ export class HostRuntime {
       name: hello.player.name?.trim() || `Player-${this.players.count()}`,
       role: 'player',
       status: 'connected',
+      midRoundOffline: false,
       ...(hello.player.avatar ? { avatar: hello.player.avatar } : {}),
       joinedAt: Date.now(),
     });
@@ -423,6 +441,9 @@ export class HostRuntime {
     if (!player) return;
     // 软离线：保留玩家对象与其房间内数据，给一个宽限期等待重连 (§17 Phase 4)。
     this.players.setStatus(player.id, 'offline');
+    // 仅在局中（gameJoinable=false，即 bidding/playing）保留席位 30s；
+    // 局前/局后退出不保留，新玩家立即可补位。rebindPeer 重连时清回 false。
+    this.players.setMidRoundOffline(player.id, this.gameJoinable === false);
     this.broadcastEvent('player:offline', { id: player.id });
     this.scheduleGrace(player.id);
     this.persist();
@@ -432,18 +453,35 @@ export class HostRuntime {
   /** 为离线玩家启动宽限期定时器；期满仍未重连则真正离开。 */
   private scheduleGrace(playerId: string): void {
     this.cancelGrace(playerId);
+    const player = this.players.get(playerId);
+    if (!player) return;
+    // host 自身的 peer 抖动不应当导致"立即清空"——保留 30s 宽限期等 host 回来，
+    // 这与原行为一致。只对 player 角色在局前/局后退出做"立即释放席位"。
+    const isHost = player.role === 'host';
+    const isMidRoundOffline = player.midRoundOffline;
+    if (!isHost && !isMidRoundOffline) {
+      // 局前/局后退出（仅 player）：立即清理，不等 30s。新玩家可立即补位。
+      this.runLeave(player);
+      return;
+    }
+    // host 或局中退出：30s 宽限期，到期仍未重连则清理。
     const ms = this.opts.graceMs ?? DEFAULT_GRACE_MS;
     const handle = setTimeout(() => {
       this.graceTimers.delete(playerId);
-      const player = this.players.get(playerId);
-      if (!player || player.status !== 'offline') return;
-      this.worker.leave(player);
-      this.players.remove(playerId);
-      this.broadcastEvent('player:left', { id: playerId });
-      this.persist();
-      this.emitPlayersChanged();
+      const p = this.players.get(playerId);
+      if (!p || p.status !== 'offline') return;
+      this.runLeave(p);
     }, ms);
     this.graceTimers.set(playerId, handle);
+  }
+
+  /** 实际执行一次 onLeave 收尾：worker 清状态、PlayerManager 移除、广播 left。 */
+  private runLeave(player: Player): void {
+    this.worker.leave(player);
+    this.players.remove(player.id);
+    this.broadcastEvent('player:left', { id: player.id });
+    this.persist();
+    this.emitPlayersChanged();
   }
 
   private cancelGrace(playerId: string): void {
@@ -493,6 +531,12 @@ export class HostRuntime {
 
   private handleBroadcast(event: string, payload: unknown): void {
     this.broadcastEvent(event, payload);
+  }
+
+  private handleJoinableChange(joinable: boolean): void {
+    if (this.gameJoinable === joinable) return;
+    this.gameJoinable = joinable;
+    this.admissionStatusChanged.emit(this.getAdmissionStatus());
   }
 
   private handleSend(playerId: string, event: string, payload: unknown): void {
@@ -581,6 +625,10 @@ export class HostRuntime {
   ): void {
     // 宽限期内的稳定身份已在首次加入时通过准入，不重复要求凭据和席位。
     if (clientId && this.players.getByClient(clientId)) return;
+
+    if (!this.gameJoinable) {
+      throw new RoomError('GAME_IN_PROGRESS', '游戏进行中，暂不支持加入', { recoverable: false });
+    }
 
     if (!this.getAdmissionStatus().joinable) {
       throw new RoomError('ROOM_FULL', '房间已满', { recoverable: false });

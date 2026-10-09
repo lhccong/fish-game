@@ -20,7 +20,17 @@ function post(message: WorkerToMain): void {
 
 const effects: EngineEffects = {
   onState: (state) => post({ kind: 'state', state }),
-  onBroadcast: (event, payload) => post({ kind: 'broadcast', event, payload }),
+  onBroadcast: (event, payload) => {
+    if (event === 'game:joinable-changed') {
+      // Intercept: turn into a dedicated joinable-change signal instead of
+      // broadcasting to players. Workers can call
+      //   ctx.broadcast('game:joinable-changed', { joinable: <bool> })
+      // to control whether new players may join.
+      post({ kind: 'joinable-change', joinable: Boolean(payload) });
+      return;
+    }
+    post({ kind: 'broadcast', event, payload });
+  },
   onSend: (playerId, event, payload) =>
     post({ kind: 'send', playerId, event, payload }),
   onKick: (playerId, reason) => post({ kind: 'kick', playerId, reason }),
