@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT_DIR="/thome/1panel/cong/fish-game"
 REPO_URL="https://github.com/lhccong/fish-game.git"
-BRANCH="moyu"
+BRANCH="main"
 CONTAINER="fish-game"
 IMAGE="fish-game:custom"
 PUBLIC_PORT="3215"
