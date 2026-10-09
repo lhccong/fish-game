@@ -1,5 +1,9 @@
 # 大厅后端生产部署
 
+> **想 10 分钟跑通？** 先看 [lobby-deploy-quick.md](./lobby-deploy-quick.md) —— **Docker 版**，
+> 一条 `docker run` 搞定，不用装 Node/pnpm/systemd。
+> 本文档是**裸机版**完整手册：原理 + 所有环境变量 + 故障排查 + 升级路径。
+
 项目内自带一个**轻量、生产可用**的大厅服务：`scripts/lobby-mock.mjs`。本仓库的
 "mock" 不是"开发期假实现"——它实现了 [lobby-service.md](./lobby-service.md) 的全
 部契约（GET /v1/health、GET/POST/PATCH/DELETE /v1/rooms、60s 租约、leaseToken 鉴
@@ -132,7 +136,7 @@ VITE_LOBBY_SERVICE_URL=https://lobby.example.com
 | `PORT` | `5157` | start.mjs 对外端口 |
 | `HOST` | `0.0.0.0` | 绑定地址 |
 | `LOBBY_INTERNAL` | `5158` | mock 子进程端口（用户不应访问） |
-| `LOBBY_STORAGE_FILE` | `data/lobby.json` | 持久化文件，建议放 `/var/lib/...` |
+| `LOBBY_STORAGE_FILE` | `data/lobby.json` | 持久化文件，默认写到 `./data/lobby.json`（`data/` 在 .gitignore 不会入仓）。生产部署可设 `/var/lib/.../lobby.json` |
 | `ALLOWED_ORIGINS` | （空，全开） | 逗号分隔的 Web Origin 列表。**生产必填** |
 | `STATIC_DIR` | `apps/web/dist` | start.mjs 服务的静态目录 |
 
