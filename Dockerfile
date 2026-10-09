@@ -40,11 +40,6 @@ COPY --from=builder /app/apps ./apps
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/node_modules ./node_modules
 
-# 健康检查要 wget，slim 镜像默认没有
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends wget ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
-
 # 数据卷：房间列表持久化挂到这里
 RUN mkdir -p /data
 VOLUME ["/data"]
@@ -53,7 +48,7 @@ EXPOSE 5157
 
 # 健康检查走对外端口的健康端点（由 start.mjs 暴露）
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:5157/v1/health || exit 1
+  CMD ["node", "-e", "const req = require('node:http').get({ hostname: '127.0.0.1', port: process.env.PORT || 5157, path: '/v1/health' }, res => { res.resume(); process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); setTimeout(() => { req.destroy(); process.exit(1); }, 4000);"]
 
 # 不直接用 start 脚本（tsx 启动有命令前缀），用 node 显式调用
 CMD ["node", "--import", "tsx", "scripts/start.mjs"]
