@@ -1,0 +1,32 @@
+{
+  "partiVersion": "0.1.0",
+  "protocolVersion": 1,
+  "id": "aeroplane-3d",
+  "name": "云端竞速 · 3D 飞行棋",
+  "version": "1.1.0",
+  "description": "Low-poly 3D 飞行棋：2-6 人在公平的正 N 边形赛道上竞速，含同色跳、对角捷径与多种随机格子事件，支持 AI 补位与断线重连。",
+  "tags": ["board-game", "party", "3d", "race"],
+  "cover": "cover.jpg",
+  "packageMode": "filesystem",
+  "entry": {
+    "ui": "index.html",
+    "worker": "room.worker.js"
+  },
+  "room": {
+    "minPlayers": 2,
+    "maxPlayers": 6,
+    "allowSpectators": true
+  },
+  "sync": { "mode": "snapshot" },
+  "permissions": {
+    "network": false,
+    "storage": "session"
+  },
+  "actions": {
+    "setSeatCount": { "payload": "{ count: 2 | 3 | 4 | 5 | 6 }" },
+    "start": {},
+    "rollDice": {},
+    "movePlane": { "payload": "{ planeId: string }" },
+    "rematch": {}
+  }
+}

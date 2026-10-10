@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e1116" />
+    <title>云端竞速 · 3D 飞行棋</title>
+    <script type="module" crossorigin src="./assets/index-DmG6hPNu.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CMrjqhdR.css">
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="field" aria-label="3D 飞行棋赛道"></canvas>
+
+      <header id="topbar" class="topbar">
+        <div id="brand" class="brand">
+          <span class="seal" aria-hidden="true"><i></i></span>
+          <div><strong>云端竞速</strong><small>LOW-POLY AEROPLANE CHESS</small></div>
+        </div>
+        <div class="menu">
+          <span id="theme-badge" class="theme-badge">天空童话</span>
+          <button id="menu-toggle" class="icon-button menu-toggle" aria-label="设置" aria-expanded="false" aria-controls="menu-panel">☰ 设置</button>
+          <div id="menu-panel" class="menu-panel hidden">
+            <button id="quality" class="icon-button" aria-label="切换画质">画质·高</button>
+            <button id="motion" class="icon-button" aria-label="切换动画">动画·完整</button>
+            <button id="recenter" class="icon-button" aria-label="回正视角">视角·回正</button>
+            <button id="sound" class="icon-button" aria-label="切换声音">声音·开</button>
+          </div>
+        </div>
+      </header>
+
+      <section id="lobby" class="panel lobby">
+        <div class="lobby-route" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <p class="eyebrow">PARTI FLIGHT CONTROL · 4–6 SEATS</p>
+        <h1>选择航队，<br /><span>准备起飞。</span></h1>
+        <p class="lead">每位飞行员拥有完全相同的航程。选择地图规模，空缺席位将由 AI 接管。</p>
+        <p class="field-label">航队规模</p>
+        <div class="seat-grid" id="seat-grid">
+          <button class="seat-count selected" data-count="4">4 人</button>
+          <button class="seat-count" data-count="5">5 人</button>
+          <button class="seat-count" data-count="6">6 人</button>
+        </div>
+        <p class="field-label">登机名单</p>
+        <div id="players" class="players"></div>
+        <button id="start" class="primary">开启航程 <span aria-hidden="true">→</span></button>
+        <p id="lobby-note" class="note">每局重新生成地图与出生点 · 座位随机分配</p>
+        <div class="feature-strip"><span>公平航程</span><span>智能补位</span><span>昼夜循环</span></div>
+      </section>
+
+      <section id="hud" class="hud hidden">
+        <div class="hud-turn turn-card">
+          <span id="seat-badge" class="seat-badge">赤</span>
+          <div class="turn-text">
+            <small id="identity">你的航队 · 赤方</small>
+            <strong id="turn">赤方回合</strong>
+            <small id="status" class="status">请掷骰子</small>
+          </div>
+        </div>
+        <div id="legend" class="legend"></div>
+        <div id="event-feed" class="event-feed hidden"></div>
+        <div id="roll-dock" class="roll-dock hidden">
+          <small>FLIGHT ACTION</small>
+          <button id="roll" class="primary">掷骰起飞 <span id="dice-face" class="dice-face"></span></button>
+        </div>
+      </section>
+
+      <section id="result" class="panel result hidden">
+        <p class="eyebrow">FLIGHT LOG · RACE CONCLUDED</p>
+        <h2 id="result-title">对局结束</h2>
+        <ol id="ranking" class="ranking"></ol>
+        <button id="rematch" class="primary">再次启航 <span aria-hidden="true">→</span></button>
+      </section>
+
+      <div id="announcement" class="announcement hidden"><span></span></div>
+      <aside id="cell-tooltip" class="cell-tooltip hidden" aria-live="polite">
+        <small data-cell-category></small>
+        <strong data-cell-title></strong>
+        <p data-cell-description></p>
+      </aside>
+      <div id="agent-live" class="sr-only" aria-live="polite"></div>
+    </div>
+  </body>
+</html>
