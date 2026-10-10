@@ -12,7 +12,7 @@ import {
   type RoomMessage,
 } from '@parti/core';
 import { createPackage, decodeFilesBase64, type RoomPackage } from '@parti/room-packager';
-import { createTransportAdapter, type TransportConfig } from './transportConfig';
+import { createTransportAdapter, resolveJoinTransport, type TransportConfig } from './transportConfig';
 import { findRoom, loadPackageSource } from './rooms';
 import { loadMarketPackage, validateDownloadedRoomPackage } from './marketPackage';
 import type { RoomDownloadSource } from './customRooms';
@@ -22,7 +22,7 @@ type WebsitePackageData = Omit<PackageDataPayload, 'files'> & RoomDownloadSource
 type PackageResponse = PackageDataPayload | WebsitePackageData;
 
 export type FetchPackageErrorCode = 'timeout' | 'disconnected';
-export type PackageJoinStage = 'connecting' | 'signaling' | 'dataChannel' | 'downloading' | 'validating';
+export type PackageJoinStage = 'connecting' | 'relay' | 'signaling' | 'dataChannel' | 'downloading' | 'validating';
 
 export class FetchPackageError extends Error {
   readonly code: FetchPackageErrorCode;
@@ -45,7 +45,9 @@ export async function fetchPackageOverPeer(
   } = {},
 ): Promise<RoomPackage> {
   options.onStage?.('connecting');
-  const adapter = await createTransportAdapter(options.transportConfig ?? { adapter: 'peerjs' }, options.onStage);
+  const config = resolveJoinTransport(hostPeerId, options.transportConfig);
+  if (config.adapter === 'relay') options.onStage?.('relay');
+  const adapter = await createTransportAdapter(config, options.onStage);
   const transport = await adapter.joinRoom({
     roomId,
     hostConnectionInfo: hostPeerId,

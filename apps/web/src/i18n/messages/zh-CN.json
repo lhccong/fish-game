@@ -358,6 +358,7 @@
       "invalidCredential": "房间密码错误"
     },
     "joinStage": {
+      "relay": "正在连接网站同步服务器（最多 15 秒）…",
       "connecting": "正在连接房主…",
       "signaling": "正在连接信令服务（最多 20 秒）…",
       "dataChannel": "正在与房主建立数据通道（最多 30 秒）…",

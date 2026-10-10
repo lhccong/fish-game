@@ -356,6 +356,7 @@
       "invalidCredential": "Incorrect room password"
     },
     "joinStage": {
+      "relay": "Connecting to the website sync server (up to 15 seconds)...",
       "connecting": "Connecting to the host...",
       "signaling": "Connecting to the signaling service (up to 20 seconds)...",
       "dataChannel": "Establishing a data channel with the host (up to 30 seconds)...",

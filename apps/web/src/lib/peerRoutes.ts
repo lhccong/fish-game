@@ -1,4 +1,4 @@
-import { validateTransportConfig, type TransportConfig } from './transportConfig';
+import { DEFAULT_ONLINE_TRANSPORT, resolveJoinTransport, validateTransportConfig, type TransportConfig } from './transportConfig';
 
 export interface PeerRoute {
   mode: 'host' | 'join' | 'agent'; roomId?: string; hostPeerId?: string; credential?: string; transportConfig: TransportConfig;
@@ -6,7 +6,7 @@ export interface PeerRoute {
 
 function configFromQuery(query: URLSearchParams, legacy: boolean): TransportConfig {
   const adapter = query.get('adapter');
-  if (legacy || !adapter) return { adapter: 'peerjs' };
+  if (!adapter) return legacy ? { adapter: 'peerjs' } : DEFAULT_ONLINE_TRANSPORT;
   if (adapter === 'relay') return { adapter: 'relay' };
   if (adapter === 'peerjs') {
     return validateTransportConfig({ adapter: 'peerjs', ...(query.get('server') ? { serverUrl: query.get('server')! } : {}) });
@@ -26,13 +26,15 @@ export function parsePeerRoute(hash: string): PeerRoute {
   const legacy = parts[0] === 'peer';
   const online = parts[0] === 'online';
   const params = new URLSearchParams(query);
+  const connectionInfo = parts[3] ? decodeURIComponent(parts[3]) : undefined;
   if ((legacy || online) && (parts[1] === 'join' || parts[1] === 'agent')) return {
     mode: parts[1] === 'agent' ? 'agent' : 'join',
     roomId: parts[2] ? decodeURIComponent(parts[2]) : undefined,
-    hostPeerId: parts[3] ? decodeURIComponent(parts[3]) : undefined,
-    credential: params.get('password') ?? undefined, transportConfig: configFromQuery(params, legacy),
+    hostPeerId: connectionInfo,
+    credential: params.get('password') ?? undefined,
+    transportConfig: resolveJoinTransport(connectionInfo ?? '', configFromQuery(params, legacy)),
   };
-  return { mode: 'host', roomId: parts[2] ? decodeURIComponent(parts[2]) : undefined, transportConfig: { adapter: 'peerjs' } };
+  return { mode: 'host', roomId: parts[2] ? decodeURIComponent(parts[2]) : undefined, transportConfig: DEFAULT_ONLINE_TRANSPORT };
 }
 
 function configParams(config: TransportConfig, password = ''): URLSearchParams {
@@ -46,17 +48,17 @@ function configParams(config: TransportConfig, password = ''): URLSearchParams {
   return params;
 }
 
-export function buildInviteUrl(origin: string, pathname: string, roomId: string, connectionInfo: string, password = '', config: TransportConfig = { adapter: 'peerjs' }): string {
+export function buildInviteUrl(origin: string, pathname: string, roomId: string, connectionInfo: string, password = '', config: TransportConfig = DEFAULT_ONLINE_TRANSPORT): string {
   return `${origin}${pathname}#${buildJoinHashRoute(roomId, connectionInfo, password, config)}`;
 }
 
-export function buildJoinHashRoute(roomId: string, connectionInfo: string, credential?: string, config: TransportConfig = { adapter: 'peerjs' }): string {
-  return `/online/join/${encodeURIComponent(roomId)}/${encodeURIComponent(connectionInfo)}?${configParams(config, credential).toString()}`;
+export function buildJoinHashRoute(roomId: string, connectionInfo: string, credential?: string, config: TransportConfig = DEFAULT_ONLINE_TRANSPORT): string {
+  return `/online/join/${encodeURIComponent(roomId)}/${encodeURIComponent(connectionInfo)}?${configParams(resolveJoinTransport(connectionInfo, config), credential).toString()}`;
 }
 
 /** AI agent 专用加入链接：与普通加入同参数，仅路由段不同，用于 agent 模式渲染。 */
-export function buildAgentInviteUrl(origin: string, pathname: string, roomId: string, connectionInfo: string, password = '', config: TransportConfig = { adapter: 'peerjs' }): string {
-  return `${origin}${pathname}#/online/agent/${encodeURIComponent(roomId)}/${encodeURIComponent(connectionInfo)}?${configParams(config, password).toString()}`;
+export function buildAgentInviteUrl(origin: string, pathname: string, roomId: string, connectionInfo: string, password = '', config: TransportConfig = DEFAULT_ONLINE_TRANSPORT): string {
+  return `${origin}${pathname}#/online/agent/${encodeURIComponent(roomId)}/${encodeURIComponent(connectionInfo)}?${configParams(resolveJoinTransport(connectionInfo, config), password).toString()}`;
 }
 
 function parseHash(hash: string): string | null {

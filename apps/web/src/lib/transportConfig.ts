@@ -15,6 +15,20 @@ export interface TransportProfile {
   custom: boolean;
 }
 
+export const DEFAULT_ONLINE_TRANSPORT: TransportConfig = { adapter: 'relay' };
+export const RELAY_CONNECTION_PREFIX = 'relay:';
+
+export function resolveJoinTransport(connectionInfo: string, config?: TransportConfig): TransportConfig {
+  // Relay invitations remain identifiable if a directory drops transportConfig.
+  return connectionInfo.startsWith(RELAY_CONNECTION_PREFIX)
+    ? DEFAULT_ONLINE_TRANSPORT
+    : config ?? DEFAULT_ONLINE_TRANSPORT;
+}
+
+export function resolveHostTransport(downloadable: boolean, selected: TransportConfig): TransportConfig {
+  return downloadable ? DEFAULT_ONLINE_TRANSPORT : selected;
+}
+
 export type CustomTransportProfileInput = Pick<TransportProfile, 'name' | 'config'>;
 export const BUILTIN_PEERJS_ID = 'builtin:peerjs';
 export const BUILTIN_RELAY_ID = 'builtin:relay';

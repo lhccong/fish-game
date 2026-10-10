@@ -193,7 +193,7 @@ export function Lobby() {
                       onClick={() => {
                         const connectionInfo = room.connectionInfo ?? room.hostPeerId;
                         if (!connectionInfo) return;
-                        navigateToPeerJoin(buildJoinHashRoute(room.roomId, connectionInfo, undefined, room.transportConfig ?? { adapter: 'peerjs' }));
+                        navigateToPeerJoin(buildJoinHashRoute(room.roomId, connectionInfo, undefined, room.transportConfig));
                       }}
                     >
                       {room.joinable ? (

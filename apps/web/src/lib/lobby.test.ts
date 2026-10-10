@@ -64,6 +64,13 @@ beforeEach(() => {
 });
 
 describe('peer routes', () => {
+  it('uses relay for online links without adapter metadata and relay-marked directory entries', () => {
+    expect(parsePeerRoute('#/online/join/room/host').transportConfig).toEqual({ adapter: 'relay' });
+    const url = buildInviteUrl('https://parti.test', '/', 'room', 'relay:host', '', { adapter: 'peerjs' });
+    expect(parsePeerRoute(new URL(url).hash).transportConfig).toEqual({ adapter: 'relay' });
+    expect(parsePeerRoute('#/peer/join/room/relay%3Ahost?adapter=relay').transportConfig).toEqual({ adapter: 'relay' });
+    expect(parsePeerRoute('#/online/join/room/host?adapter=peerjs').transportConfig).toEqual({ adapter: 'peerjs' });
+  });
   it('round-trips server relay invitations without a host secret or third-party URL', () => {
     const config: TransportConfig = { adapter: 'relay' };
     const url = buildInviteUrl('https://parti.test', '/', 'counter', 'public-host-id', '', config);
@@ -72,7 +79,7 @@ describe('peer routes', () => {
   });
   it('encodes and parses password invite links', () => {
     const url = buildInviteUrl('https://parti.test', '/app/', 'room id', 'peer/one', '0123');
-    expect(url).toBe('https://parti.test/app/#/online/join/room%20id/peer%2Fone?adapter=peerjs&password=0123');
+    expect(url).toBe('https://parti.test/app/#/online/join/room%20id/peer%2Fone?adapter=relay&password=0123');
     expect(parsePeerRoute('#/peer/join/room%20id/peer%2Fone?password=0123')).toMatchObject({
       mode: 'join',
       roomId: 'room id',

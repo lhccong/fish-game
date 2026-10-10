@@ -53,7 +53,7 @@ import {
 } from '@/components/ui/dialog';
 import type { ReplayRecordingController } from '../replays/recorder';
 import { ENABLE_REPLAYS } from '../lib/featureFlags';
-import { configuredTransport, type TransportConfig } from '../lib/transportConfig';
+import { configuredTransport, resolveHostTransport, type TransportConfig } from '../lib/transportConfig';
 import {
   publishLanRoom,
   type LanRoomAnnouncement,
@@ -90,14 +90,14 @@ function PeerHostView({ roomId, transportConfig }: { roomId?: string; transportC
   const intl = useIntl();
   const [pkg, setPkg] = useState<RoomPackage | null>(null);
   const [cover, setCover] = useState<string>();
-  const [marketRoom, setMarketRoom] = useState(false);
+  const [downloadableRoom, setDownloadableRoom] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!roomId) return;
     Promise.all([loadRoomSnapshot(roomId), loadRoomCover(roomId).catch(() => undefined), loadRoomDownloadSource(roomId)]).then(([next, image, source]) => {
       setCover(image);
-      setMarketRoom(Boolean(source && 'marketSource' in source));
+      setDownloadableRoom(Boolean(source));
       setPkg(next);
     }).catch((reason) => {
       setError(formatResolveError(intl, reason));
@@ -118,10 +118,8 @@ function PeerHostView({ roomId, transportConfig }: { roomId?: string; transportC
     isPublic: true,
     replayEnabled: false,
   };
-  return <PeerHostSession pkg={pkg} cover={cover} initialSettings={initialSettings} transportConfig={marketRoom ? MARKET_TRANSPORT : transportConfig} />;
+  return <PeerHostSession pkg={pkg} cover={cover} initialSettings={initialSettings} transportConfig={resolveHostTransport(downloadableRoom, transportConfig)} />;
 }
-
-const MARKET_TRANSPORT: TransportConfig = { adapter: 'relay' };
 
 function PeerHostSession({
   pkg,

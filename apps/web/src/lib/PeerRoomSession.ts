@@ -28,7 +28,7 @@ import { ReconnectingClient } from './ReconnectingClient';
 import { clearHostRoomSettings } from './roomSettings';
 import { loadLocalUser } from './localUser';
 import { localUserToEffective } from './effectiveIdentity';
-import { createTransportAdapter, type TransportConfig } from './transportConfig';
+import { createTransportAdapter, resolveHostTransport, type TransportConfig } from './transportConfig';
 import { loadRoomDownloadSource } from './customRooms';
 
 /**
@@ -90,7 +90,7 @@ export async function createPeerHost(
   // 复用上次的稳定 host peer id（即邀请码），使刷新后邀请链接不变。
   const restored = store.loadRoom(roomId);
   const downloadSource = await loadRoomDownloadSource(roomId);
-  const adapter = await createTransportAdapter(options.transportConfig);
+  const adapter = await createTransportAdapter(resolveHostTransport(Boolean(downloadSource), options.transportConfig));
   const transport = await adapter.createHost({
     roomId,
     ...(restored?.hostPeerId ? { hostId: restored.hostPeerId } : {}),

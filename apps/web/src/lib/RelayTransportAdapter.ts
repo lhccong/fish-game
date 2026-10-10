@@ -3,6 +3,7 @@ import type {
   TransportAdapter, TransportMessage,
 } from '@parti/core';
 import { createUuid } from './ids';
+import { RELAY_CONNECTION_PREFIX } from './transportConfig';
 
 type Frame = {
   type: 'ready' | 'join' | 'leave' | 'message';
@@ -103,7 +104,7 @@ export class RelayTransportAdapter implements TransportAdapter {
     bind();
     return {
       selfId: ready.selfId,
-      connectionInfo: ready.hostId,
+      connectionInfo: `${RELAY_CONNECTION_PREFIX}${ready.hostId}`,
       send: (target, message) => send(socket, { type: 'message', target, message }),
       broadcast: (message, config) => {
         for (const target of peers) {
@@ -125,7 +126,10 @@ export class RelayTransportAdapter implements TransportAdapter {
   }
 
   async joinRoom(options: JoinRoomOptions): Promise<ClientTransportSession> {
-    const { socket, ready } = await connect({ type: 'join', roomId: options.roomId, hostId: options.hostConnectionInfo });
+    const hostId = options.hostConnectionInfo.startsWith(RELAY_CONNECTION_PREFIX)
+      ? options.hostConnectionInfo.slice(RELAY_CONNECTION_PREFIX.length)
+      : options.hostConnectionInfo;
+    const { socket, ready } = await connect({ type: 'join', roomId: options.roomId, hostId });
     let onMessage: (message: TransportMessage) => void = () => {};
     let onDisconnect: (reason?: string) => void = () => {};
     socket.onmessage = event => {

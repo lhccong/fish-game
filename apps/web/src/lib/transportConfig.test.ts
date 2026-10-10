@@ -3,6 +3,7 @@ import {
   BUILTIN_LAN_ID, BUILTIN_PEERJS_ID, BUILTIN_RELAY_ID, deleteCustomTransportProfile,
   createTransportAdapter, getLanDiscoveryConfig, getSelectedTransportProfile, getTransportProfiles, peerOptionsFromServerUrl,
   saveCustomTransportProfile, selectTransportProfile, validateTransportConfig,
+  resolveHostTransport, resolveJoinTransport,
 } from './transportConfig';
 
 class MemoryStorage implements Storage {
@@ -16,6 +17,13 @@ class MemoryStorage implements Storage {
 }
 
 describe('transport profiles', () => {
+  it('uses the same relay policy for builtin and market downloads without changing custom rooms', () => {
+    expect(resolveHostTransport(true, { adapter: 'peerjs' })).toEqual({ adapter: 'relay' });
+    expect(resolveHostTransport(false, { adapter: 'peerjs' })).toEqual({ adapter: 'peerjs' });
+    expect(resolveJoinTransport('relay:host', { adapter: 'peerjs' })).toEqual({ adapter: 'relay' });
+    expect(resolveJoinTransport('host')).toEqual({ adapter: 'relay' });
+    expect(resolveJoinTransport('host', { adapter: 'peerjs' })).toEqual({ adapter: 'peerjs' });
+  });
   it('offers server relay first, alongside PeerJS and LAN', () => {
     const storage = new MemoryStorage();
     expect(getTransportProfiles(storage).map((profile) => profile.id)).toEqual([BUILTIN_RELAY_ID, BUILTIN_PEERJS_ID, BUILTIN_LAN_ID]);

@@ -14,7 +14,7 @@ import {
   type ClientTransportSession,
 } from '@parti/core';
 import type { RoomClientPort } from '@parti/client-sdk';
-import { createTransportAdapter, type TransportConfig } from './transportConfig';
+import { createTransportAdapter, resolveJoinTransport, type TransportConfig } from './transportConfig';
 
 export interface ReconnectingClientOptions {
   roomId: string;
@@ -84,7 +84,7 @@ export class ReconnectingClient {
     this.cleanupRuntime();
     this.opts.onStatus?.(this.attempt === 0 ? 'connecting' : 'reconnecting');
     try {
-      const adapter = await createTransportAdapter(this.opts.transportConfig);
+      const adapter = await createTransportAdapter(resolveJoinTransport(this.opts.hostPeerId, this.opts.transportConfig));
       if (this.disposed) return;
       const transport = await adapter.joinRoom({
         roomId: this.opts.roomId,
