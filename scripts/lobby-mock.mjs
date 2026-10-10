@@ -463,6 +463,12 @@ const server = createHttpServer(async (req, res) => {
       const publicUrl = MINIO_CONFIG.publicBase
         ? `${MINIO_CONFIG.publicBase}/${key}`
         : undefined;
+      // publicUrl（如果有配 MINIO_PUBLIC_BASE）就是 joiner 端 fetch 的直链 —
+      // 不带签名，长期有效，访问控制交给 MinIO bucket 策略（joiner 必须能
+      // 网络可达 MinIO，dev 环境通常需要 MINIO_PUBLIC_BASE 指向 host LAN IP
+      // 而非 127.0.0.1）。这把"准入"全部放回 P2P 通道（host 端
+      // handlePackageRequest 决定把 URL 给谁），同时避免签名 URL 过期后
+      // joiner 拿不到 zip 的故障模式。
       sendJson(res, 200, {
         url,
         key,
@@ -498,55 +504,6 @@ const server = createHttpServer(async (req, res) => {
       }
       await s3Client.send(new DeleteObjectCommand({ Bucket: MINIO_CONFIG.bucket, Key: key }));
       sendJson(res, 200, { ok: true, key });
-      return;
-    }
-
-    // === /api/upload/get ===============================================
-    // body: { hostUserId, key } —— 返回一次性 GET presigned URL 给 joiner 拉 zip。
-    //
-    // 关键设计：调用方传的是 *房主* userId（而不是 joiner 自己的），因为 zip
-    // 是房主上传到 MinIO 的，key 形如 game/<房主 userId>/<templateId>.zip。
-    // joiner 在 sys:package-request 阶段已通过 host 的准入检查，host 主动
-    // 把这个 { hostUserId, key } 透传给 joiner，joiner 据此向 lobby-mock 申请
-    // 拉取。这里我们只校验"key 必须以 game/<hostUserId>/ 开头"和"hostUserId
-    // 合法"，不重新做准入 —— 那属于 host 侧职责（避免 lobby-mock 还要管理
-    // 房间租约/lobby 关系，把鉴权面做错）。
-    //
-    // 防滥用：(1) hostUserId 字符串白名单(与上传通道同)；(2) key 形态白名单
-    // 在 validateMinioTemplateId 风格上保持一致；(3) key 路径段防 `..` 越级；
-    // (4) 一次性签名 600s 自然过期，不需要在服务端记录 join 状态。
-    if (req.method === 'POST' && url.pathname === '/api/upload/get') {
-      if (!MINIO_ENABLED) {
-        return sendError(res, 503, 'UPLOAD_DISABLED', '服务端未配置 MinIO');
-      }
-      const body = await readJsonBody(req);
-      const { hostUserId, key } = body || {};
-      const userErr = validateMinioUserId(hostUserId);
-      if (userErr) {
-        const isAnon = hostUserId === ANON_USER_ID;
-        return sendError(res, isAnon ? 401 : 422, isAnon ? 'UNAUTHENTICATED' : 'INVALID_INPUT', userErr);
-      }
-      if (typeof key !== 'string' || !key) {
-        return sendError(res, 422, 'INVALID_INPUT', 'key 必须是非空字符串');
-      }
-      if (key.length > 512) return sendError(res, 422, 'INVALID_INPUT', 'key 长度不能超过 512');
-      if (!key.startsWith(`game/${hostUserId}/`)) {
-        return sendError(res, 403, 'FORBIDDEN_KEY', 'key 必须以 game/<hostUserId>/ 开头');
-      }
-      if (key.includes('..') || key.split('/').some((p) => p === '')) {
-        return sendError(res, 422, 'INVALID_INPUT', 'key 包含非法路径段');
-      }
-      // 服务端先 HEAD 这个对象 —— 验证存在且属于该用户，避免把过期的孤儿 key
-      // 当作 200 返回。HEAD 失败时不要把错误信息区分得过于详细（避免侧信道
-      // 探测其它用户 key 存在性），统一回 404。
-      try {
-        await s3Client.send(new GetObjectCommand({ Bucket: MINIO_CONFIG.bucket, Key: key }));
-      } catch {
-        return sendError(res, 404, 'NOT_FOUND', '对象不存在或已过期');
-      }
-      const command = new GetObjectCommand({ Bucket: MINIO_CONFIG.bucket, Key: key });
-      const url = await getSignedUrl(s3Client, command, { expiresIn: MINIO_CONFIG.presignTtlSeconds });
-      sendJson(res, 200, { url, key, bucket: MINIO_CONFIG.bucket, expiresIn: MINIO_CONFIG.presignTtlSeconds });
       return;
     }
 

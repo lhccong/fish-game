@@ -30,7 +30,6 @@ import { loadLocalUser } from './localUser';
 import { localUserToEffective } from './effectiveIdentity';
 import { createTransportAdapter, resolveHostTransport, type TransportConfig } from './transportConfig';
 import { loadRoomDownloadSource } from './customRooms';
-
 /**
  * 当前页面内活跃的房间会话清理器（host 或 client），key = roomId。
  * 用于「退出到大厅」时先销毁仍在运行的 runtime，再清除存储——
@@ -95,7 +94,10 @@ export async function createPeerHost(
     roomId,
     ...(restored?.hostPeerId ? { hostId: restored.hostPeerId } : {}),
   });
-  // Preserve admission checks, but send download metadata instead of website/market files.
+  // 把 sys:package-data 改写为 downloadSource：builtin / market 走 P2P 元数据 +
+  // joiner 自取 GitHub/静态目录，custom 走 joinGetUrl（lobby-mock 签发的长时效
+  // GET presigned URL）+ joiner 自取 MinIO。无论哪种来源，joiner 都不依赖房主
+  // userId、不再 inline 整个 base64 files（P2P 通道放大 base64 不可取）。
   if (downloadSource) {
     const send = transport.send.bind(transport);
     transport.send = (peerId, message) => {
@@ -116,7 +118,8 @@ export async function createPeerHost(
     worker: createWebWorkerHost(),
     roomSource: getWorkerSource(pkg),
     manifest: pkg.manifest,
-    // Downloadable packages only send metadata; custom packages still include their files.
+    // downloadSource 存在时（builtin / market / custom），HostRuntime 不必再
+    // inline base64 files —— joiner 收到 downloadSource 后自己下载解压。
     packageFiles: downloadSource ? {} : encodeFilesBase64(pkg.files),
     hostName: identity.name,
     ...(identity.avatar ? { hostAvatar: identity.avatar } : {}),

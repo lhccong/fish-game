@@ -19,6 +19,12 @@ export interface CustomPackageRecord {
   createdAt: number;
   /** 浏览器上传到 MinIO 的对象 key；删除本地模板时同步删除。 */
   remoteKey?: string;
+  /**
+   * lobby-mock 在 presign 阶段根据 MINIO_PUBLIC_BASE 拼出来的直链，joiner 拿
+   * 这个 fetch MinIO 拿 zip。不带签名、长期有效；访问控制交给 MinIO bucket
+   * 策略 + P2P 准入。
+   */
+  remotePublicUrl?: string;
 }
 
 export interface RoomSnapshotRecord {

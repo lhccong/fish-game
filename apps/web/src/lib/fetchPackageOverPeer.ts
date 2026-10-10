@@ -1,6 +1,11 @@
 /**
- * Joiners request admission metadata, then download website/market/minio files
- * (or receive inline files when no remote source is available).
+ * Joiners request admission metadata, then download the room package from a
+ * source the host points them at:
+ *   - builtinSourceId  → loadPackageSource(id)  (fetch public/rooms/...)
+ *   - marketSource      → loadMarketPackage(src) (fetch GitHub)
+ *   - customRemote      → fetch joinGetUrl       (fetch MinIO via long-lived
+ *                          presigned GET URL stored in IndexedDB by the host)
+ *   - inline base64     → fallback when host broadcasts the files directly
  */
 import {
   PARTI_VERSION,
@@ -17,16 +22,15 @@ import { unzipRoomPackage } from '@parti/room-source';
 import { createTransportAdapter, resolveJoinTransport, type TransportConfig } from './transportConfig';
 import { findRoom, loadPackageSource } from './rooms';
 import { loadMarketPackage, validateDownloadedRoomPackage } from './marketPackage';
-import { getCurrentUserId } from './currentUser';
-import { getRemoteDownloadUrl, UploadHttpError } from './uploadToMinio';
-import {
-  type RoomDownloadSource,
-  validateCustomRemote,
-} from './customRooms';
+import { validateCustomRemote } from './customRemote';
 
 const PACKAGE_FETCH_TIMEOUT_MS = 60_000;
-type WebsitePackageData = Omit<PackageDataPayload, 'files'> & RoomDownloadSource & { packageHash: string };
-type PackageResponse = PackageDataPayload | WebsitePackageData;
+type DownloadSource =
+  | { builtinSourceId: string; packageHash: string }
+  | { marketSource: unknown; packageHash: string }
+  | { customRemote: unknown; packageHash: string };
+type DownloadPackageData = Omit<PackageDataPayload, 'files'> & DownloadSource;
+type PackageResponse = PackageDataPayload | DownloadPackageData;
 
 export type FetchPackageErrorCode = 'timeout' | 'disconnected';
 export type PackageJoinStage = 'connecting' | 'relay' | 'signaling' | 'dataChannel' | 'downloading' | 'validating';
@@ -63,6 +67,9 @@ export async function fetchPackageOverPeer(
   try {
     options.onStage?.('downloading');
     const data = await requestPackageData(transport, roomId, options);
+    if ('builtinSourceId' in data) {
+    } else if ('marketSource' in data) {
+    }
     if ('builtinSourceId' in data || 'marketSource' in data) {
       if ('builtinSourceId' in data && (typeof data.builtinSourceId !== 'string' || !findRoom(data.builtinSourceId))) {
         throw new Error('Built-in package is not available on this website');
@@ -147,53 +154,25 @@ function requestPackageData(
 }
 
 /**
- * 走 MinIO 下载用户上传 / 编辑器创建的自定义包。
- *
- * 流程：
- *   1) POST /api/upload/get 拿到一次性 GET presigned URL。这里用 *房主* 的
- *      userId（remote.hostUserId）—— zip 是房主上传的，joiner 自己没有这个
- *      key 的所有权。准入在 host 的 handlePackageRequest 已完成，lobby-mock
- *      不再重做（只验 key 前缀与 hostUserId 一致）。
- *   2) 浏览器 fetch 这个 URL 拉 zip 字节。
- *   3) unzipRoomPackage 解包出 files。
- *   4) createPackage 重算 hash 校验与 host 声明一致（与 marketSource 分支
- *      共用 validateDownloadedRoomPackage）。
+ * 走 lobby-mock 在 presign 阶段返回的 publicUrl（MINIO_PUBLIC_BASE 拼出来的
+ * 直链，http(s)://<host>:<port>/<bucket>/<key>）直接 fetch MinIO 拿 zip 字节。
+ * 不依赖签名过期、长期可用；访问控制交给 MinIO bucket 策略 + P2P 准入
+ * （host 端 handlePackageRequest 决定把 URL 给谁）。
  *
  * 失败语义：
- *   - joiner 自己未登录：报错要求登录（与"上传要登录"对称，避免在未登录状态
- *     静默走奇怪的回退路径）。
- *   - UploadHttpError(404 NOT_FOUND)：对象过期/被房主删除。错误消息复用
- *     "Reinstall the game and create a new room"，与 market 404 路径保持一致。
- *   - UploadHttpError(403 FORBIDDEN_KEY)：服务端认为 hostUserId 与 key 不匹配，
- *     多半是房主改了登录账号或模板被另一个用户覆盖。提示房主重新建房。
- *   - 其它：直接抛给上层（joiner UI 走"游戏文件不可用"提示）。
+ *   - HTTP 4xx/5xx：把"Downloaded package is unavailable"抛给上层，引导
+ *     提示房主"检查 MINIO_PUBLIC_BASE 是否对 joiner 网络可达 / bucket 策略"。
+ *   - 其它：直接抛给上层。
  */
 async function loadCustomPackageFromRemote(
-  remote: { uploadBackend: '/api/upload/get'; hostUserId: string; key: string },
+  remote: { publicUrl: string },
   manifest: unknown,
   roomId: string,
   packageHash: string,
 ): Promise<RoomPackage> {
-  const joinerUserId = getCurrentUserId();
-  if (joinerUserId === 'anon') {
-    throw new Error('Login is required to download this custom room package.');
-  }
-  let presigned;
-  try {
-    presigned = await getRemoteDownloadUrl({ userId: remote.hostUserId, key: remote.key });
-  } catch (error) {
-    if (error instanceof UploadHttpError && error.status === 404) {
-      throw new Error('Downloaded package is missing. Reinstall the game and create a new room.');
-    }
-    if (error instanceof UploadHttpError && error.status === 403) {
-      throw new Error('Room host changed account or the package was overwritten. Ask the host to recreate the room.');
-    }
-    throw error;
-  }
-
-  const response = await fetch(presigned.url);
+  const response = await fetch(remote.publicUrl);
   if (!response.ok) {
-    throw new Error(`Failed to download room zip: HTTP ${response.status}`);
+    throw new Error(`Downloaded package is unavailable (HTTP ${response.status}). Check MINIO_PUBLIC_BASE is reachable and bucket policy allows this key.`);
   }
   const buffer = await response.arrayBuffer();
   const files = await unzipRoomPackage(new Uint8Array(buffer));

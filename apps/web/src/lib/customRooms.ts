@@ -70,6 +70,7 @@ export async function createRoomSnapshot(
       { forcePreferredId: true },
     );
     let remoteKey: string | undefined;
+    let remotePublicUrl: string | undefined;
     try {
       const userId = getCurrentUserId();
       if (userId === 'anon') throw new UploadRequiresLoginError();
@@ -83,6 +84,12 @@ export async function createRoomSnapshot(
       });
       await putBlobToUrl(presigned.url, new Blob([zipBuffer], { type: 'application/zip' }));
       remoteKey = presigned.key;
+      // publicUrl 是 lobby-mock 在 presign 阶段根据 MINIO_PUBLIC_BASE 拼出来的
+      // 直链。joiner 拿这个直链 fetch MinIO 拿 zip —— 不依赖签名过期、可
+      // 长期使用，访问控制由 MinIO bucket 策略 + P2P 准入完成。publicUrl
+      // 可选：dev 环境如果 MINIO_PUBLIC_BASE 没配（默认指向 127.0.0.1，
+      // 其它机器不可达），joiner 端会走 fallback。
+      remotePublicUrl = presigned.publicUrl;
     } catch (error) {
       if (error instanceof UploadUnavailableError) {
         remoteKey = undefined;
@@ -96,7 +103,9 @@ export async function createRoomSnapshot(
         throw error;
       }
     }
-    customRecord = remoteKey ? { ...baseRecord, remoteKey } : baseRecord;
+    customRecord = remoteKey
+      ? { ...baseRecord, remoteKey, remotePublicUrl }
+      : baseRecord;
     sourcePackage = await createPackage({ manifest: customRecord.manifest, files: customRecord.files });
     source = { type: 'custom', id: customRecord.id };
   }
@@ -144,26 +153,16 @@ export async function loadRoomDownloadSource(roomId: string): Promise<RoomDownlo
   const record = await (await getDb()).get('roomSnapshots', roomId);
   if (record?.source.type === 'builtin') return { builtinSourceId: record.source.id };
   if (record?.marketPackage) return { marketSource: validateMarketPackageSource(record.marketPackage) };
-  // 用户上传 / 编辑器创建：customPackages store 里有 remoteKey（MinIO 对象 key）。
-  // 这里只读自己机器的 IndexedDB，不来自网络，因此可以直接信任。
-  // hostUserId 来自 *房主* 自己的当前登录身份 —— 调用方是 host 浏览器（详见
-  // PeerRoomSession.createPeerHost），不是 joiner 浏览器。
+  // 用户上传 / 编辑器创建：customPackages store 里存了 remotePublicUrl（lobby-mock
+  // 在 presign 阶段根据 MINIO_PUBLIC_BASE 拼出来的直链）。host 端 createPeerHost
+  // 时把 URL 广播给 joiner，joiner 直接 fetch MinIO 拿 zip —— 不依赖签名过期，
+  // 长期可用；访问控制交给 MinIO bucket 策略 + P2P 准入（host 端
+  // handlePackageRequest 决定把 URL 给谁）。
   if (record?.source.type === 'custom') {
     const custom = await (await getDb()).get('customPackages', record.source.id);
-    if (custom?.remoteKey) {
-      const hostUserId = getCurrentUserId();
-      if (hostUserId === 'anon') {
-        // 没登录却建了带 remoteKey 的房间：与文档"未登录无法上传"一致，
-        // 这种状态不应当存在；如果发生了，直接当没下载源，让 joiner 端走
-        // 旧 base64 路径并报错"请房主重新登录后建房"，比暴露 anon 模糊错误好。
-        return undefined;
-      }
+    if (custom?.remotePublicUrl) {
       return {
-        customRemote: {
-          uploadBackend: '/api/upload/get',
-          hostUserId,
-          key: custom.remoteKey,
-        },
+        customRemote: { publicUrl: custom.remotePublicUrl },
       };
     }
   }

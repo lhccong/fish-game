@@ -39,15 +39,16 @@
 用户自行上传、编辑、ZIP 导入的游戏在 `sys:package-data` 中改为
 `{ manifest, packageHash, customRemote }`，其中 `customRemote` 描述
 `{ uploadBackend, hostUserId, key }`：加入者先经准入拿到元信息，
-再经 lobby-mock 的 `POST /api/upload/get`（body 用 `hostUserId` + `key`）
+再经 lobby-mock 的 `POST /api/upload/get`（body 用 `userId` + `key`，
+其中 `userId` 取自 `customRemote.hostUserId`）
 拿一次性 GET presigned URL 从 MinIO 拉 zip，重算哈希后走 `sys:hello`，
 与市场/内置游戏走相同的下载模式。`hostUserId` 是房主而非加入者的登录
 id —— zip 在 MinIO 上以 `game/<房主 userId>/...` 命名，加入者侧拉取时
 必须用房主身份；准入仍在 host 端的 `handlePackageRequest` 阶段完成，
-lobby-mock 只校验 key 前缀与 `hostUserId` 一致，不重做房间准入。下载失败
+lobby-mock 只校验 key 前缀与 `userId` 一致，不重做房间准入。下载失败
 不回退到房主发包；未带 `remoteKey` 的旧自定义安装需重新上传后再建房。
 不与房间快照一起保存任何租约或签名，服务端在签 URL 前再做一次
-`game/<hostUserId>/` 前缀校验防止越权。
+`game/<userId>/` 前缀校验防止越权。
 
 ## 部署
 

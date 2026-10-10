@@ -19,6 +19,11 @@ export interface PresignedUpload {
   key: string;
   bucket: string;
   expiresIn: number;
+  /**
+   * joiner 直拉 MinIO 用的公开直链（来自 lobby-mock 的 MINIO_PUBLIC_BASE）。
+   * 如果服务端没配 publicBase，joiner 端就需要走 fallback（例如 P2P inline
+   * base64）。访问控制全部交给 MinIO bucket 策略 + P2P 准入。
+   */
   publicUrl?: string;
 }
 
