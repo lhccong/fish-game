@@ -83,6 +83,11 @@ interface LobbyRoom extends LobbyRoomInput {
 
 ### `POST /v1/rooms`
 
+请求可携带 `publicationKey`（客户端生成并在发送前保存在 sessionStorage 的随机 UUID）。
+同一服务、同一房间的重试复用该标识；服务端按其摘要复用未过期的条目并更新展示信息，
+返回原租约，避免创建响应丢失后重试生成重复记录。新建返回 201，复用返回 200。
+此标识是私密凭据，不放入大厅列表或分享链接，不能用公开的房间 ID 代替。
+
 Body 为 `LobbyRoomInput`。成功返回：
 
 ```json

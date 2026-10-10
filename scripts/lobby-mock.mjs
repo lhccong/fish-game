@@ -21,7 +21,7 @@
  *   NODE_ENV=production PORT=5158 ALLOWED_ORIGINS=https://a.com,https://b.com \
  *     STORAGE_FILE=/var/lib/fish-game/lobby.json node scripts/lobby-mock.mjs
  */
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createServer as createHttpServer } from 'node:http';
@@ -70,7 +70,7 @@ function loadListings() {
     return new Map();
   }
 }
-/** @type {Map<string, { token: string, entry: object }>} */
+/** @type {Map<string, { token: string, entry: object, publicationHash?: string }>} */
 const listings = loadListings();
 let writeTimer = null;
 function persistAsync() {
@@ -311,10 +311,36 @@ const server = createHttpServer(async (req, res) => {
       const body = await readJsonBody(req);
       const error = validateInput(body);
       if (error) return sendError(res, 422, 'INVALID_INPUT', error);
+      if (body.publicationKey !== undefined &&
+          (typeof body.publicationKey !== 'string' || !/^[a-f0-9-]{36}$/i.test(body.publicationKey))) {
+        return sendError(res, 422, 'INVALID_INPUT', 'publicationKey 格式不正确');
+      }
+      cleanExpired();
+      // The random publication key is private; room IDs alone must not grant lease access.
+      const publicationHash = body.publicationKey
+        ? createHash('sha256').update(body.publicationKey).digest('hex')
+        : undefined;
+      if (publicationHash) {
+        for (const [id, record] of listings) {
+          if (record.publicationHash !== publicationHash) continue;
+          if (record.entry.roomId !== body.roomId) {
+            return sendError(res, 409, 'PUBLICATION_CONFLICT', '发布标识已用于其他房间');
+          }
+          const updatedAt = now();
+          record.entry = {
+            ...makeEntry(body, id, record.entry.createdAt),
+            updatedAt,
+            expiresAt: updatedAt + LEASE_TTL_MS,
+          };
+          persistAsync();
+          sendJson(res, 200, { listingId: id, leaseToken: record.token, expiresAt: record.entry.expiresAt });
+          return;
+        }
+      }
       const listingId = `listing_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
       const createdAt = now();
       const entry = makeEntry(body, listingId, createdAt);
-      listings.set(listingId, { token: randomToken(), entry });
+      listings.set(listingId, { token: randomToken(), entry, ...(publicationHash ? { publicationHash } : {}) });
       persistAsync();
       sendJson(res, 201, {
         listingId,

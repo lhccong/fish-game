@@ -90,10 +90,10 @@ export class LobbyClient {
     return data.rooms;
   }
 
-  async createRoom(input: LobbyRoomInput): Promise<LobbyLease> {
+  async createRoom(input: LobbyRoomInput, publicationKey?: string): Promise<LobbyLease> {
     return this.request('/v1/rooms', {
       method: 'POST',
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, ...(publicationKey ? { publicationKey } : {}) }),
     });
   }
 
@@ -143,6 +143,8 @@ export class LobbyPublisher {
   private input: LobbyRoomInput | null = null;
   private timer?: ReturnType<typeof setInterval>;
   private operations: Promise<void> = Promise.resolve();
+  private readonly publicationKey: string;
+  private enabled = false;
 
   constructor(
     private readonly roomId: string,
@@ -150,6 +152,9 @@ export class LobbyPublisher {
     private readonly onStatus: (status: LobbyStatusKey) => void,
   ) {
     this.lease = loadLease(roomId);
+    const key = `parti:lobby-publication:${client.baseUrl}:${roomId}`;
+    this.publicationKey = sessionStorage.getItem(key) || crypto.randomUUID();
+    sessionStorage.setItem(key, this.publicationKey);
   }
 
   private enqueue(operation: () => Promise<void>): Promise<void> {
@@ -160,7 +165,8 @@ export class LobbyPublisher {
   }
 
   publish(input: LobbyRoomInput): Promise<void> {
-    return this.enqueue(() => this.publishNow(input));
+    this.enabled = true;
+    return this.enqueue(() => this.enabled ? this.publishNow(input) : Promise.resolve());
   }
 
   private async publishNow(input: LobbyRoomInput): Promise<void> {
@@ -176,13 +182,13 @@ export class LobbyPublisher {
         this.lease = null;
       }
     }
-    if (!this.lease) this.lease = await this.client.createRoom(input);
+    if (!this.lease) this.lease = await this.client.createRoom(input, this.publicationKey);
     saveLease(this.roomId, this.lease);
     this.onStatus('published');
   }
 
   sync(input: LobbyRoomInput): Promise<void> {
-    return this.enqueue(() => this.syncNow(input));
+    return this.enqueue(() => this.enabled ? this.syncNow(input) : Promise.resolve());
   }
 
   private async syncNow(input: LobbyRoomInput): Promise<void> {
@@ -211,6 +217,8 @@ export class LobbyPublisher {
   }
 
   unpublish(): Promise<void> {
+    this.enabled = false;
+    this.stopHeartbeat();
     return this.enqueue(() => this.unpublishNow());
   }
 
@@ -232,7 +240,7 @@ export class LobbyPublisher {
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.timer = setInterval(() => {
-      if (this.input) void this.sync(this.input);
+      if (this.enabled && this.input) void this.sync(this.input).catch(() => this.onStatus('syncFailed'));
     }, 20_000);
   }
 
