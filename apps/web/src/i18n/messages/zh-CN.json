@@ -29,11 +29,20 @@
       "transport": {
         "recommended": "推荐",
         "customOption": "{label} · {name}",
+        "relay": {
+          "optionLabel": "服务器同步 / WebSocket",
+          "title": "服务器同步",
+          "technology": "WebSocket",
+          "summary": "网站服务器转发操作和状态，房主负责运行游戏，需保持在线。",
+          "network": "玩家连接网站服务器，无需 WebRTC 打洞。",
+          "latency": "延迟取决于各玩家到网站服务器的网络。",
+          "reliability": "需要网站支持 WebSocket；服务器中断会影响所有房间。"
+        },
         "peerjs": {
-          "optionLabel": "默认联机 / PeerJS",
-          "title": "默认联机",
+          "optionLabel": "点对点联机 / PeerJS",
+          "title": "点对点联机",
           "technology": "PeerJS / WebRTC",
-          "summary": "适合大多数与朋友远程联机的情况，建议优先选择。",
+          "summary": "玩家直接连接房主，可作为服务器同步之外的可选方式。",
           "network": "Wi-Fi 和移动数据之间也可以互相联机。",
           "latency": "通常延迟较低，操作响应更及时。",
           "reliability": "少数受限网络可能无法建立连接；遇到失败时可改用稳定联机。"

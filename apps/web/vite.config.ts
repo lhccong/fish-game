@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { authMiddlewarePlugin, denyLocalConfigsPlugin } from './src/server/auth/vitePlugin.js';
 import { gaSnippetPlugin } from './src/server/analytics/gaSnippet.js';
+import { attachRelay } from './src/server/relay';
 
 /**
  * 在构建/开发期扫描 public/rooms/ 下的内置模板，生成虚拟模块 `virtual:room-registry`。
@@ -104,6 +105,11 @@ export default defineConfig({
   // npm workspace 从 apps/web 启动 Vite，但本地环境配置放在仓库根目录。
   envDir: path.resolve(__dirname, '..', '..'),
   plugins: [
+    {
+      name: 'parti-relay',
+      configureServer(server) { if (server.httpServer) attachRelay(server.httpServer); },
+      configurePreviewServer(server) { attachRelay(server.httpServer); },
+    },
     roomRegistryPlugin(),
     authMiddlewarePlugin(),
     denyLocalConfigsPlugin(),

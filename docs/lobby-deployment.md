@@ -34,6 +34,9 @@
 
 外部 HTTPS 由 Nginx/Caddy 反代完成（见第 5 节）。
 
+网站进程还在 `/api/relay` 提供游戏消息转发。Nginx / 1Panel 必须启用 WebSocket，
+并设置 `ALLOWED_ORIGINS` 为网站公开 Origin，详见[服务器同步](./server-relay.md)。
+
 ## 2. 服务端准备工作
 
 最低要求：任意一台 Linux VPS（Ubuntu 22.04 / Debian 12 即可），1 核 1G 内存就够了。

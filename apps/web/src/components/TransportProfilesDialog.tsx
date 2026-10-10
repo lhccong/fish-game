@@ -24,7 +24,7 @@ function draftFor(profile: TransportProfile): Draft {
   if (profile.config.adapter === 'peerjs') {
     return { id: profile.id, name: profile.name, type: 'peerjs', serverUrl: profile.config.serverUrl ?? '', supabaseUrl: '', publishableKey: '' };
   }
-  if (profile.config.adapter === 'lan') {
+  if (profile.config.adapter === 'lan' || profile.config.adapter === 'relay') {
     return { id: profile.id, name: profile.name, type: 'peerjs', serverUrl: '', supabaseUrl: '', publishableKey: '' };
   }
   return { id: profile.id, name: profile.name, type: 'supabase', serverUrl: '', supabaseUrl: profile.config.url, publishableKey: profile.config.publishableKey };
@@ -73,7 +73,7 @@ export function TransportProfilesDialog({ open, onOpenChange, onProfilesChange }
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{profile.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {profile.config.adapter === 'peerjs' ? 'PeerJS' : 'Supabase Realtime'}
+                    {profile.config.adapter === 'relay' ? 'WebSocket' : profile.config.adapter === 'peerjs' ? 'PeerJS' : 'Supabase Realtime'}
                     {!profile.custom && ` · ${intl.formatMessage({ id: 'user.settings.profilesBuiltIn' })}`}
                   </div>
                 </div>

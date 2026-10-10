@@ -29,11 +29,20 @@
       "transport": {
         "recommended": "Recommended",
         "customOption": "{label} · {name}",
+        "relay": {
+          "optionLabel": "Server sync / WebSocket",
+          "title": "Server sync",
+          "technology": "WebSocket",
+          "summary": "The website relays actions and state. The host runs the game and must stay online.",
+          "network": "Players connect to the website server without WebRTC NAT traversal.",
+          "latency": "Latency depends on each player's connection to the website server.",
+          "reliability": "Requires WebSocket support. A server outage affects all rooms."
+        },
         "peerjs": {
-          "optionLabel": "Default connection / PeerJS",
-          "title": "Default connection",
+          "optionLabel": "Peer-to-peer / PeerJS",
+          "title": "Peer-to-peer",
           "technology": "PeerJS / WebRTC",
-          "summary": "Best for most remote sessions with friends. Try this first.",
+          "summary": "Players connect directly to the host as an alternative to server sync.",
           "network": "Works between Wi-Fi and mobile data connections.",
           "latency": "Usually low latency for more responsive play.",
           "reliability": "Some restricted networks may fail to connect; try Stable connection if that happens."

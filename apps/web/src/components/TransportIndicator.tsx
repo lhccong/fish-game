@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
-import { CheckIcon, DatabaseIcon, WifiIcon, RouteIcon } from 'lucide-react';
+import { CheckIcon, DatabaseIcon, WifiIcon, RouteIcon, ServerIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   getSelectedTransportProfile,
@@ -12,15 +12,17 @@ import {
   type TransportProfile,
 } from '@/lib/transportConfig';
 
-type TransportKind = 'peerjs' | 'lan' | 'supabase';
+type TransportKind = 'relay' | 'peerjs' | 'lan' | 'supabase';
 
 function transportKind(config: TransportConfig): TransportKind {
+  if (config.adapter === 'relay') return 'relay';
   if (config.adapter === 'peerjs') return 'peerjs';
   if (config.adapter === 'lan') return 'lan';
   return 'supabase';
 }
 
 const transportIcons = {
+  relay: ServerIcon,
   peerjs: RouteIcon,
   lan: WifiIcon,
   supabase: DatabaseIcon,

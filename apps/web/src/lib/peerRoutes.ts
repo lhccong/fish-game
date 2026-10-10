@@ -7,6 +7,7 @@ export interface PeerRoute {
 function configFromQuery(query: URLSearchParams, legacy: boolean): TransportConfig {
   const adapter = query.get('adapter');
   if (legacy || !adapter) return { adapter: 'peerjs' };
+  if (adapter === 'relay') return { adapter: 'relay' };
   if (adapter === 'peerjs') {
     return validateTransportConfig({ adapter: 'peerjs', ...(query.get('server') ? { serverUrl: query.get('server')! } : {}) });
   }

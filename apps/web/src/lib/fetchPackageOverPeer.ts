@@ -13,8 +13,11 @@ import {
 } from '@parti/core';
 import { createPackage, decodeFilesBase64, type RoomPackage } from '@parti/room-packager';
 import { createTransportAdapter, type TransportConfig } from './transportConfig';
+import { findRoom, loadPackageSource } from './rooms';
 
 const PACKAGE_FETCH_TIMEOUT_MS = 60_000;
+type WebsitePackageData = Omit<PackageDataPayload, 'files'> & { builtinSourceId: string; packageHash: string };
+type PackageResponse = PackageDataPayload | WebsitePackageData;
 
 export type FetchPackageErrorCode = 'timeout' | 'disconnected';
 export type PackageJoinStage = 'connecting' | 'signaling' | 'dataChannel' | 'downloading' | 'validating';
@@ -49,8 +52,22 @@ export async function fetchPackageOverPeer(
   try {
     options.onStage?.('downloading');
     const data = await requestPackageData(transport, roomId, options);
+    if ('builtinSourceId' in data) {
+      if (typeof data.builtinSourceId !== 'string' || !findRoom(data.builtinSourceId)) {
+        throw new Error('Built-in package is not available on this website');
+      }
+      const source = await loadPackageSource(data.builtinSourceId);
+      options.onStage?.('validating');
+      const pkg = await createPackage({ manifest: data.manifest, files: source.files });
+      if (pkg.manifest.id !== roomId || pkg.packageHash !== data.packageHash) {
+        throw new Error('Website package differs from the host package. Ask the host to create a new room.');
+      }
+      return pkg;
+    }
     options.onStage?.('validating');
-    return await createPackage({ manifest: data.manifest, files: decodeFilesBase64(data.files) });
+    const pkg = await createPackage({ manifest: data.manifest, files: decodeFilesBase64(data.files) });
+    if (pkg.manifest.id !== roomId) throw new Error('Room package ID mismatch');
+    return pkg;
   } finally {
     transport.close();
   }
@@ -60,8 +77,8 @@ function requestPackageData(
   transport: ClientTransportSession,
   roomId: string,
   options: { clientId?: string; credential?: string },
-): Promise<PackageDataPayload> {
-  return new Promise<PackageDataPayload>((resolve, reject) => {
+): Promise<PackageResponse> {
+  return new Promise<PackageResponse>((resolve, reject) => {
     const seq = new SeqCounter();
     let settled = false;
 
@@ -77,7 +94,7 @@ function requestPackageData(
       if (message.type === 'sys:package-data') {
         settled = true;
         clearTimeout(timer);
-        resolve(message.payload as PackageDataPayload);
+        resolve(message.payload as PackageResponse);
       } else if (message.type === 'sys:error') {
         settled = true;
         clearTimeout(timer);

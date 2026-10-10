@@ -211,6 +211,17 @@ function validateInput(input) {
   }
   if (typeof input.joinable !== 'boolean') return 'joinable 必须是布尔';
   if (typeof input.credentialRequired !== 'boolean') return 'credentialRequired 必须是布尔';
+  if (input.connectionInfo !== undefined &&
+      (typeof input.connectionInfo !== 'string' || !input.connectionInfo || input.connectionInfo.length > 512)) {
+    return 'Invalid connectionInfo';
+  }
+  if (input.transportConfig !== undefined) {
+    const config = input.transportConfig;
+    if (!config || typeof config !== 'object' || Array.isArray(config) ||
+        !['relay', 'peerjs', 'lan', 'common'].includes(config.adapter) ||
+        JSON.stringify(config).length > 4096) return 'Invalid transportConfig';
+    if (config.adapter === 'relay' && Object.keys(config).some(key => key !== 'adapter')) return 'Invalid relay configuration';
+  }
   if (input.gameJoinable !== undefined && typeof input.gameJoinable !== 'boolean') {
     return 'gameJoinable 必须是布尔（可选）';
   }
@@ -239,6 +250,8 @@ function makeEntry(input, listingId, createdAt) {
     listingId,
     roomId: input.roomId,
     hostPeerId: input.hostPeerId,
+    ...(input.connectionInfo ? { connectionInfo: input.connectionInfo } : {}),
+    ...(input.transportConfig ? { transportConfig: input.transportConfig } : {}),
     title: input.title.trim(),
     packageName: input.packageName,
     playerCount: input.playerCount,

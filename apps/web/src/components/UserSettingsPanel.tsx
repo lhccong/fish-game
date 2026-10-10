@@ -48,7 +48,8 @@ import {
 const sectionCardClass =
   'gap-4 rounded-[18px] border-border bg-[linear-gradient(150deg,var(--surface-2),var(--surface))] flex-shrink-0';
 
-function transportMessageSuffix(config: TransportConfig): 'peerjs' | 'lan' | 'supabase' {
+function transportMessageSuffix(config: TransportConfig): 'relay' | 'peerjs' | 'lan' | 'supabase' {
+  if (config.adapter === 'relay') return 'relay';
   if (config.adapter === 'peerjs') return 'peerjs';
   if (config.adapter === 'lan') return 'lan';
   return 'supabase';
@@ -220,7 +221,7 @@ export function UserSettingsPanel({ open, onOpenChange }: UserSettingsPanelProps
                   <span className="font-semibold text-foreground">
                     {intl.formatMessage({ id: `user.settings.transport.${transportSuffix}.title` })}
                   </span>
-                  {transportSuffix === 'peerjs' && (
+                  {transportSuffix === 'relay' && (
                     <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-primary-bright uppercase">
                       {intl.formatMessage({ id: 'user.settings.transport.recommended' })}
                     </span>

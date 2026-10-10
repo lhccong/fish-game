@@ -3,6 +3,11 @@
 大厅是一个浅层、可替换的在线目录。它不运行 Room Worker、不转发玩家消息、不验证房间
 密码，也不保存历史房间。Web 应用通过 `VITE_LOBBY_SERVICE_URL` 配置服务根地址。
 
+网站进程另提供独立的 `/api/relay` WebSocket 消息转发，见
+[服务器同步](./server-relay.md)；大厅目录 API 本身仍不转发游戏消息。
+目录条目可携带 `connectionInfo` 和 `transportConfig`，服务应原样返回这些连接字段，
+其中 `{ "adapter": "relay" }` 表示通过加入者所在网站的服务器转发。
+
 ## 通用要求
 
 - API 前缀为 `/v1`，请求与响应使用 UTF-8 JSON。

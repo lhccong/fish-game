@@ -3,6 +3,7 @@ import type { PeerJSAdapterOptions } from '@parti/transport-peerjs';
 import { createUuid } from './ids';
 
 export type TransportConfig =
+  | { adapter: 'relay' }
   | { adapter: 'peerjs'; serverUrl?: string }
   | { adapter: 'lan'; serverUrl?: string }
   | { adapter: 'common'; provider: 'supabase'; url: string; publishableKey: string };
@@ -16,6 +17,7 @@ export interface TransportProfile {
 
 export type CustomTransportProfileInput = Pick<TransportProfile, 'name' | 'config'>;
 export const BUILTIN_PEERJS_ID = 'builtin:peerjs';
+export const BUILTIN_RELAY_ID = 'builtin:relay';
 export const BUILTIN_LAN_ID = 'builtin:lan';
 export const MAX_TRANSPORT_PROFILE_NAME_LENGTH = 50;
 const PROFILES_KEY = 'parti:transport-profiles:v1';
@@ -64,6 +66,7 @@ function isSecretKey(key: string): boolean {
 }
 
 export function validateTransportConfig(config: TransportConfig): TransportConfig {
+  if (config.adapter === 'relay') return { adapter: 'relay' };
   if (config.adapter === 'peerjs') {
     return config.serverUrl
       ? { adapter: 'peerjs', serverUrl: validateServiceUrl(config.serverUrl, 'PeerServer URL') }
@@ -96,6 +99,7 @@ export function peerOptionsFromServerUrl(serverUrl: string): Record<string, unkn
 
 function builtInProfiles(): TransportProfile[] {
   return [
+    { id: BUILTIN_RELAY_ID, name: 'Server / WebSocket', config: { adapter: 'relay' }, custom: false },
     { id: BUILTIN_PEERJS_ID, name: 'PeerJS / WebRTC', config: { adapter: 'peerjs' }, custom: false },
     { id: BUILTIN_LAN_ID, name: 'LAN Direct / LocalSend WebRTC', config: { adapter: 'lan' }, custom: false },
   ];
@@ -137,7 +141,7 @@ export function getSelectedTransportProfile(storage: Storage = localStorage): Tr
   const profiles = getTransportProfiles(storage);
   let selectedId = storage.getItem(SELECTED_KEY);
   if (!selectedId) {
-    selectedId = BUILTIN_PEERJS_ID;
+    selectedId = BUILTIN_RELAY_ID;
   }
   const selected = profiles.find((profile) => profile.id === selectedId) ?? profiles[0]!;
   if (storage.getItem(SELECTED_KEY) !== selected.id) storage.setItem(SELECTED_KEY, selected.id);
@@ -159,6 +163,7 @@ export function saveCustomTransportProfile(
   storage: Storage = localStorage,
 ): TransportProfile {
   const custom = loadCustomProfiles(storage);
+  if (input.config.adapter === 'relay') throw new Error('Server relay is a built-in profile');
   if (input.config.adapter === 'peerjs' && !input.config.serverUrl) {
     throw new Error('PeerServer URL is required for a custom PeerJS profile');
   }
@@ -185,7 +190,7 @@ export function deleteCustomTransportProfile(id: string, storage: Storage = loca
   const custom = loadCustomProfiles(storage);
   if (!custom.some((profile) => profile.id === id)) throw new Error('Transport profile not found');
   saveCustomProfiles(storage, custom.filter((profile) => profile.id !== id));
-  if (storage.getItem(SELECTED_KEY) === id) storage.setItem(SELECTED_KEY, BUILTIN_PEERJS_ID);
+  if (storage.getItem(SELECTED_KEY) === id) storage.setItem(SELECTED_KEY, BUILTIN_RELAY_ID);
   if (storage.getItem(LAST_LAN_KEY) === id) storage.setItem(LAST_LAN_KEY, BUILTIN_LAN_ID);
   notifyProfilesChanged(storage);
 }
@@ -210,6 +215,10 @@ export async function createTransportAdapter(
   onJoinStage?: PeerJSAdapterOptions['onJoinStage'],
 ): Promise<TransportAdapter> {
   const valid = validateTransportConfig(config);
+  if (valid.adapter === 'relay') {
+    const { RelayTransportAdapter } = await import('./RelayTransportAdapter');
+    return new RelayTransportAdapter();
+  }
   if (valid.adapter === 'peerjs') {
     const { PeerJSTransportAdapter } = await import('@parti/transport-peerjs');
     return new PeerJSTransportAdapter({

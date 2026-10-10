@@ -64,6 +64,12 @@ beforeEach(() => {
 });
 
 describe('peer routes', () => {
+  it('round-trips server relay invitations without a host secret or third-party URL', () => {
+    const config: TransportConfig = { adapter: 'relay' };
+    const url = buildInviteUrl('https://parti.test', '/', 'counter', 'public-host-id', '', config);
+    expect(parsePeerRoute(new URL(url).hash).transportConfig).toEqual(config);
+    expect(parseInviteInput(url)).toBe('/online/join/counter/public-host-id?adapter=relay');
+  });
   it('encodes and parses password invite links', () => {
     const url = buildInviteUrl('https://parti.test', '/app/', 'room id', 'peer/one', '0123');
     expect(url).toBe('https://parti.test/app/#/online/join/room%20id/peer%2Fone?adapter=peerjs&password=0123');

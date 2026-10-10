@@ -77,6 +77,11 @@ export async function loadRoomSnapshot(roomId: string): Promise<RoomPackage> {
   return { manifest: record.manifest, files: record.files, packageHash: record.packageHash };
 }
 
+export async function loadBuiltinSourceId(roomId: string): Promise<string | undefined> {
+  const record = await (await getDb()).get('roomSnapshots', roomId);
+  return record?.source.type === 'builtin' ? record.source.id : undefined;
+}
+
 export async function loadRoomCover(roomId: string): Promise<string | undefined> {
   const record = await (await getDb()).get('roomSnapshots', roomId);
   if (!record) return undefined;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BUILTIN_LAN_ID, BUILTIN_PEERJS_ID, deleteCustomTransportProfile,
+  BUILTIN_LAN_ID, BUILTIN_PEERJS_ID, BUILTIN_RELAY_ID, deleteCustomTransportProfile,
   createTransportAdapter, getLanDiscoveryConfig, getSelectedTransportProfile, getTransportProfiles, peerOptionsFromServerUrl,
   saveCustomTransportProfile, selectTransportProfile, validateTransportConfig,
 } from './transportConfig';
@@ -16,9 +16,10 @@ class MemoryStorage implements Storage {
 }
 
 describe('transport profiles', () => {
-  it('only offers PeerJS and LAN as built-in profiles', () => {
+  it('offers server relay first, alongside PeerJS and LAN', () => {
     const storage = new MemoryStorage();
-    expect(getTransportProfiles(storage).map((profile) => profile.id)).toEqual([BUILTIN_PEERJS_ID, BUILTIN_LAN_ID]);
+    expect(getTransportProfiles(storage).map((profile) => profile.id)).toEqual([BUILTIN_RELAY_ID, BUILTIN_PEERJS_ID, BUILTIN_LAN_ID]);
+    expect(getSelectedTransportProfile(storage).id).toBe(BUILTIN_RELAY_ID);
   });
 
   it('creates, edits, selects and deletes custom profiles', () => {
@@ -35,17 +36,17 @@ describe('transport profiles', () => {
       adapter: 'common', provider: 'supabase', url: 'https://project.supabase.co', publishableKey: 'anon-key',
     });
     deleteCustomTransportProfile(created.id, storage);
-    expect(getSelectedTransportProfile(storage).id).toBe(BUILTIN_PEERJS_ID);
+    expect(getSelectedTransportProfile(storage).id).toBe(BUILTIN_RELAY_ID);
   });
 
   it.each([
     ['legacy common preference', 'parti:transport-preference', 'common'],
     ['removed built-in Supabase profile', 'parti:transport-profile:selected:v1', 'builtin:supabase'],
-  ])('falls back to PeerJS for %s', (_label, key, value) => {
+  ])('falls back to server relay for %s', (_label, key, value) => {
     const storage = new MemoryStorage();
     storage.setItem(key, value);
-    expect(getSelectedTransportProfile(storage).id).toBe(BUILTIN_PEERJS_ID);
-    expect(storage.getItem('parti:transport-profile:selected:v1')).toBe(BUILTIN_PEERJS_ID);
+    expect(getSelectedTransportProfile(storage).id).toBe(BUILTIN_RELAY_ID);
+    expect(storage.getItem('parti:transport-profile:selected:v1')).toBe(BUILTIN_RELAY_ID);
   });
 
   it('parses PeerServer URL and rejects unsafe services', async () => {

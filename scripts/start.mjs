@@ -36,6 +36,7 @@ import { join, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import { attachRelay } from '../apps/web/src/server/relay.ts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const rootDir   = resolve(__dirname, '..');
@@ -83,7 +84,7 @@ async function serveFile(urlPath, res) {
       const st = await stat(full);
       if (st.isFile()) {
         const content = await readFile(full);
-        const cacheControl = (c === 'index.html' || c.endsWith('/index.html'))
+        const cacheControl = (c === 'index.html' || c.endsWith('/index.html') || c.startsWith('rooms/'))
           ? 'no-cache'
           : 'public, max-age=31536000, immutable';
         res.writeHead(200, { 'Content-Type': mimeType(full), 'Cache-Control': cacheControl });
@@ -282,6 +283,8 @@ const server = createHttpServer(async (req, res) => {
   res.end('Not found');
 });
 
+const closeRelay = attachRelay(server);
+
 // ── 启动 ─────────────────────────────────────────────────────
 
 server.on('error', (err) => {
@@ -317,6 +320,7 @@ server.listen(PORT, HOST, () => {
 function shutdown(sig) {
   console.log(`[start] received ${sig}, shutting down…`);
   shutdownLobby(sig);
+  closeRelay();
   server.close(() => {
     console.log('[start] HTTP server closed');
     process.exit(0);

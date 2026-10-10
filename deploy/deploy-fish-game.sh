@@ -65,6 +65,7 @@ docker run -d \
   "${ENV_ARGS[@]}" \
   -e PORT="$CONTAINER_PORT" \
   -e HOST=0.0.0.0 \
+  -e ALLOWED_ORIGINS="$PUBLIC_URL" \
   -e LOBBY_STORAGE_FILE=/data/lobby.json \
   -e PARTI_OAUTH2_CONFIG=/app/apps/web/config.local.json \
   --mount "type=bind,source=$OAUTH_CONFIG,target=/app/apps/web/config.local.json,readonly" \
