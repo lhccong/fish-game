@@ -9,6 +9,8 @@ import { rooms as registry } from 'virtual:room-registry';
 import { getDb, type CustomPackageRecord } from './db';
 import { createDraftId } from './ids';
 import { isImportedTemplateSource } from './templateSources';
+import { getCurrentUserId } from './currentUser';
+import { deleteRemoteKey, UploadHttpError, UploadUnavailableError } from './uploadToMinio';
 
 const BUILTIN_IDS = new Set(registry.map(({ dir, manifest }) => manifest.id ?? dir));
 
@@ -62,10 +64,15 @@ export async function getTemplatePackage(id: string): Promise<RoomPackageInput |
   return record ? { manifest: record.manifest, files: record.files } : undefined;
 }
 
-async function uniqueId(preferred: string): Promise<string> {
+async function uniqueId(preferred: string, forcePreferred: boolean): Promise<string> {
   const db = await getDb();
-  if (preferred && !BUILTIN_IDS.has(preferred) && !(await db.get('customPackages', preferred))) {
-    return preferred;
+  // builtin id 永不让步（避免和内置模板撞名）。
+  if (preferred && !BUILTIN_IDS.has(preferred)) {
+    // forcePreferred=true：允许覆盖 customPackages 中已存在的同 id 条目
+    // （用于"用户改了代码再次上传"和"空白模板被重新保存"场景）。
+    if (forcePreferred || !(await db.get('customPackages', preferred))) {
+      return preferred;
+    }
   }
   let id = createDraftId(preferred || 'package');
   while (BUILTIN_IDS.has(id) || await db.get('customPackages', id)) id = createDraftId(preferred || 'package');
@@ -75,18 +82,27 @@ async function uniqueId(preferred: string): Promise<string> {
 export async function prepareCustomPackageRecord(
   input: RoomPackageInput,
   source: CustomPackageRecord['source'],
+  options: { remoteKey?: string; forcePreferredId?: boolean } = {},
 ): Promise<CustomPackageRecord> {
   const pkg = await createPackage(input);
-  const id = await uniqueId(pkg.manifest.id);
+  const id = await uniqueId(pkg.manifest.id, options.forcePreferredId === true);
   const normalized = await createPackage({ manifest: { ...pkg.manifest, id }, files: pkg.files });
-  return { id, manifest: normalized.manifest, files: normalized.files, source, createdAt: Date.now() };
+  return {
+    id,
+    manifest: normalized.manifest,
+    files: normalized.files,
+    source,
+    createdAt: Date.now(),
+    ...(options.remoteKey ? { remoteKey: options.remoteKey } : {}),
+  };
 }
 
 export async function saveCustomPackage(
   input: RoomPackageInput,
   source: CustomPackageRecord['source'],
+  options: { remoteKey?: string } = {},
 ): Promise<string> {
-  const record = await prepareCustomPackageRecord(input, source);
+  const record = await prepareCustomPackageRecord(input, source, options);
   await (await getDb()).put('customPackages', record);
   return record.id;
 }
@@ -94,7 +110,25 @@ export async function saveCustomPackage(
 export const saveImportedTemplate = saveCustomPackage;
 
 export async function deleteImportedTemplate(id: string): Promise<void> {
+  const record = await (await getDb()).get('customPackages', id);
   await (await getDb()).delete('customPackages', id);
+  if (record?.remoteKey) {
+    try {
+      // 用当前登录用户去清 MinIO；未登录时跳过（IndexedDB 反正已经删了）。
+      const userId = getCurrentUserId();
+      if (userId !== 'anon') {
+        await deleteRemoteKey({ userId, key: record.remoteKey });
+      }
+    } catch (error) {
+      if (error instanceof UploadHttpError) {
+        // 删除失败仅记日志（IndexedDB 已删成功，不会留下"假阳性"条目）
+        console.warn('[templates] 远程模板删除失败', { id, key: record.remoteKey, error: error.message });
+      } else if (!(error instanceof UploadUnavailableError)) {
+        // 通道未配置时不刷日志（开发环境无 MinIO 是正常的）
+        console.warn('[templates] 远程模板删除异常', error);
+      }
+    }
+  }
 }
 
 export async function getUsageCounts(): Promise<Record<string, number>> {

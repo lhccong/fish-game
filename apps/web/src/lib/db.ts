@@ -17,6 +17,8 @@ export interface CustomPackageRecord {
   files: Record<string, Uint8Array>;
   source: Exclude<PackageSourceInfo, { type: 'builtin' } | { type: 'custom' }>;
   createdAt: number;
+  /** 浏览器上传到 MinIO 的对象 key；删除本地模板时同步删除。 */
+  remoteKey?: string;
 }
 
 export interface RoomSnapshotRecord {

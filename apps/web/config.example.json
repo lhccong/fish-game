@@ -7,5 +7,15 @@
     "scope": "read",
     "stateSecret": "state-secret-must-be-at-least-16-chars",
     "sessionSecret": "session-secret-must-be-at-least-16-chars"
+  },
+  "minio": {
+    "endpoint": "https://minio.example.com",
+    "region": "us-east-1",
+    "accessKey": "<your-access-key>",
+    "secretKey": "<your-secret-key>",
+    "bucket": "game",
+    "publicBase": "https://minio.example.com",
+    "presignTtlSeconds": 600,
+    "forcePathStyle": false
   }
 }

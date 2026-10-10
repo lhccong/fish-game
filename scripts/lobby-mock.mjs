@@ -7,6 +7,8 @@
  *   - POST /v1/rooms
  *   - PATCH /v1/rooms/:listingId
  *   - DELETE /v1/rooms/:listingId
+ *   - POST /api/upload/presign   (用户上传 zip 用的 presigned PUT URL)
+ *   - POST /api/upload/delete    (用户删除本地模板时同步删 MinIO 文件)
  *
  * 租约 60 秒过期。
  *
@@ -20,11 +22,24 @@
  *   PORT=6000 node scripts/lobby-mock.mjs                        # 自定义端口
  *   NODE_ENV=production PORT=5158 ALLOWED_ORIGINS=https://a.com,https://b.com \
  *     STORAGE_FILE=/var/lib/fish-game/lobby.json node scripts/lobby-mock.mjs
+ *
+ * MinIO 上传通道（可选，优先级：环境变量 > apps/web/config.local.json 的 minio 段）：
+ *   MINIO_ENDPOINT=http://127.0.0.1:9000
+ *   MINIO_REGION=us-east-1
+ *   MINIO_ACCESS_KEY=minioadmin
+ *   MINIO_SECRET_KEY=minioadmin123
+ *   MINIO_BUCKET=game
+ *   MINIO_PUBLIC_BASE=http://127.0.0.1:9000          # 可选，生成可下载的 publicUrl
+ *   MINIO_PRESIGN_TTL_SECONDS=600                     # 可选，默认 600
+ *   MINIO_FORCE_PATH_STYLE=true                       # 可选，MinIO 必须 true
+ * 任何一项未配置 → /api/upload/* 路由返回 503，避免悄悄回落到本机文件系统。
  */
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createServer as createHttpServer } from 'node:http';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const PORT = Number.parseInt(process.env.PORT ?? '5158', 10) || 5158;
@@ -36,6 +51,98 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
+
+// === MinIO 上传通道配置 ===========================================
+// 优先级：环境变量 MINIO_* > apps/web/config.local.json 的 minio 段。
+// 任一项缺失就关闭 /api/upload/* 路由（不静默回落），强制要求部署方明确配置。
+function loadMinioConfigFromFile() {
+  // 候选路径：先 npm run dev 启动的 cwd，再 __dirname（脚本自身），再 apps/web/config.local.json。
+  // 缺文件时静默返回空对象（dev 默认就是 MinIO enabled 的话，这是预期行为）。
+  const cwd = process.cwd();
+  // ESM 下没有 __dirname，用 import.meta.url 还原脚本所在目录。
+  const scriptDir = new URL('.', import.meta.url);
+  const scriptDirPath = scriptDir.pathname.replace(/^\/([A-Za-z]:)/, '$1');
+  const candidates = [
+    join(cwd, 'apps', 'web', 'config.local.json'),
+    join(cwd, 'config.local.json'),
+    join(scriptDirPath, '..', 'apps', 'web', 'config.local.json'),
+  ];
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    try {
+      const raw = readFileSync(candidate, 'utf8');
+      const parsed = JSON.parse(raw);
+      return (parsed && typeof parsed === 'object' && parsed.minio) || {};
+    } catch (error) {
+      console.warn(
+        `[lobby-mock] 无法解析 ${candidate}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return {};
+    }
+  }
+  return {};
+}
+
+const MINIO_FILE_CONFIG = loadMinioConfigFromFile();
+const fileMinio = MINIO_FILE_CONFIG || {};
+
+const pickMinioString = (envName, fileValue) => {
+  const fromEnv = process.env[envName];
+  if (typeof fromEnv === 'string' && fromEnv.trim().length > 0) return fromEnv.trim();
+  return typeof fileValue === 'string' ? fileValue : '';
+};
+
+const pickMinioNumber = (envName, fileValue, fallback) => {
+  const fromEnv = process.env[envName];
+  if (typeof fromEnv === 'string' && fromEnv.trim().length > 0) {
+    const n = Number.parseInt(fromEnv, 10);
+    if (Number.isFinite(n)) return n;
+  }
+  if (typeof fileValue === 'number' && Number.isFinite(fileValue)) return fileValue;
+  return fallback;
+};
+
+const pickMinioBoolean = (envName, fileValue, fallback) => {
+  const fromEnv = process.env[envName];
+  if (typeof fromEnv === 'string' && fromEnv.trim().length > 0) {
+    return fromEnv.trim().toLowerCase() !== 'false';
+  }
+  if (typeof fileValue === 'boolean') return fileValue;
+  return fallback;
+};
+
+const MINIO_CONFIG = {
+  endpoint: pickMinioString('MINIO_ENDPOINT', fileMinio.endpoint),
+  region: pickMinioString('MINIO_REGION', fileMinio.region) || 'us-east-1',
+  accessKey: pickMinioString('MINIO_ACCESS_KEY', fileMinio.accessKey),
+  secretKey: pickMinioString('MINIO_SECRET_KEY', fileMinio.secretKey),
+  bucket: pickMinioString('MINIO_BUCKET', fileMinio.bucket) || 'game',
+  publicBase: pickMinioString('MINIO_PUBLIC_BASE', fileMinio.publicBase).replace(/\/$/, ''),
+  presignTtlSeconds: pickMinioNumber(
+    'MINIO_PRESIGN_TTL_SECONDS',
+    fileMinio.presignTtlSeconds,
+    600,
+  ),
+  forcePathStyle: pickMinioBoolean(
+    'MINIO_FORCE_PATH_STYLE',
+    fileMinio.forcePathStyle,
+    true,
+  ),
+};
+const MINIO_ENABLED = Boolean(MINIO_CONFIG.endpoint && MINIO_CONFIG.accessKey && MINIO_CONFIG.secretKey);
+const s3Client = MINIO_ENABLED
+  ? new S3Client({
+      endpoint: MINIO_CONFIG.endpoint,
+      region: MINIO_CONFIG.region,
+      credentials: { accessKeyId: MINIO_CONFIG.accessKey, secretAccessKey: MINIO_CONFIG.secretKey },
+      forcePathStyle: MINIO_CONFIG.forcePathStyle,
+    })
+  : null;
+if (MINIO_ENABLED) {
+  console.log(`[lobby-mock] MinIO enabled: endpoint=${MINIO_CONFIG.endpoint} bucket=${MINIO_CONFIG.bucket}`);
+} else {
+  console.log('[lobby-mock] MinIO disabled (set MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY to enable /api/upload/*)');
+}
 
 
 function now() {
@@ -175,6 +282,26 @@ const REQUIRED_FIELDS = [
   'credentialRequired',
 ];
 
+// === MinIO 上传 userId / templateId 校验 ============================
+// userId = 摸鱼岛登录用户的稳定 id（FishUser.id，来自 OAuth2 userinfo）；
+// 客户端"未登录"会传 'anon'，直接拒绝。
+// templateId 形如 custom_<uuid> 等。
+// 不允许路径分隔符、..、控制字符。
+const ANON_USER_ID = 'anon';
+function validateMinioUserId(userId) {
+  if (typeof userId !== 'string' || !userId) return 'userId 必须是非空字符串';
+  if (userId === ANON_USER_ID) return '未登录用户不允许上传';
+  if (userId.length > 128) return 'userId 长度不能超过 128';
+  if (!/^[A-Za-z0-9_-]+$/.test(userId)) return 'userId 只能包含字母数字下划线和短横线';
+  return null;
+}
+function validateMinioTemplateId(templateId) {
+  if (typeof templateId !== 'string' || !templateId) return 'templateId 必须是非空字符串';
+  if (templateId.length > 128) return 'templateId 长度不能超过 128';
+  if (!/^[A-Za-z0-9_-]+$/.test(templateId)) return 'templateId 只能包含字母数字下划线和短横线';
+  return null;
+}
+
 // playerClientIds 是可选字段，host 上报时附带，用于 lobby server 给 viewer
 // 算 selfRejoinable（让局中掉线的人能在 30s 内看到"加入游戏"按钮）。
 const OPTIONAL_FIELDS = ['gameJoinable', 'playerClientIds'];
@@ -295,6 +422,82 @@ const server = createHttpServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/v1/health') {
       sendJson(res, 200, { ok: true, version: 1 });
+      return;
+    }
+
+    // === /api/upload/presign ============================================
+    // body: { userId, templateId, fileName, contentType? }
+    // 限制：key 路径形如 game/<userId>/<templateId>.zip，绝不允许 .. 越级。
+    if (req.method === 'POST' && url.pathname === '/api/upload/presign') {
+      if (!MINIO_ENABLED) {
+        return sendError(res, 503, 'UPLOAD_DISABLED', '服务端未配置 MinIO');
+      }
+      const body = await readJsonBody(req);
+      const { userId, templateId, fileName, contentType } = body || {};
+      const userErr = validateMinioUserId(userId);
+      if (userErr) {
+        const isAnon = userId === ANON_USER_ID;
+        return sendError(res, isAnon ? 401 : 422, isAnon ? 'UNAUTHENTICATED' : 'INVALID_INPUT', userErr);
+      }
+      const tplErr = validateMinioTemplateId(templateId);
+      if (tplErr) return sendError(res, 422, 'INVALID_INPUT', tplErr);
+      if (fileName !== undefined && (typeof fileName !== 'string' || fileName.length > 256)) {
+        return sendError(res, 422, 'INVALID_INPUT', 'fileName 必须是 ≤256 字符串');
+      }
+      if (contentType !== undefined && (typeof contentType !== 'string' || contentType.length > 128)) {
+        return sendError(res, 422, 'INVALID_INPUT', 'contentType 必须是 ≤128 字符串');
+      }
+      const key = `game/${userId}/${templateId}.zip`;
+      const command = new PutObjectCommand({
+        Bucket: MINIO_CONFIG.bucket,
+        Key: key,
+        ContentType: contentType || 'application/zip',
+        // MinIO 默认不做 server-side encryption。AWS SDK v3 的 PutObject 在
+        // 启用 flexible checksum 后会自动计算 x-amz-checksum-crc32 并加到请求头；
+        // 而 presigner 签名时只覆盖已签的 headers，加密的 SSE-AES256 才会触发
+        // 那个 header。生产部署若想加密，应在桶策略层启用，而非本参数。
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
+      });
+      const url = await getSignedUrl(s3Client, command, { expiresIn: MINIO_CONFIG.presignTtlSeconds });
+      const publicUrl = MINIO_CONFIG.publicBase
+        ? `${MINIO_CONFIG.publicBase}/${key}`
+        : undefined;
+      sendJson(res, 200, {
+        url,
+        key,
+        bucket: MINIO_CONFIG.bucket,
+        expiresIn: MINIO_CONFIG.presignTtlSeconds,
+        ...(publicUrl ? { publicUrl } : {}),
+      });
+      return;
+    }
+
+    // === /api/upload/delete =============================================
+    // body: { userId, key } —— 防止用户 A 删用户 B 的文件，key 必须以 game/<userId>/ 开头。
+    if (req.method === 'POST' && url.pathname === '/api/upload/delete') {
+      if (!MINIO_ENABLED) {
+        return sendError(res, 503, 'UPLOAD_DISABLED', '服务端未配置 MinIO');
+      }
+      const body = await readJsonBody(req);
+      const { userId, key } = body || {};
+      const userErr = validateMinioUserId(userId);
+      if (userErr) {
+        const isAnon = userId === ANON_USER_ID;
+        return sendError(res, isAnon ? 401 : 422, isAnon ? 'UNAUTHENTICATED' : 'INVALID_INPUT', userErr);
+      }
+      if (typeof key !== 'string' || !key) {
+        return sendError(res, 422, 'INVALID_INPUT', 'key 必须是非空字符串');
+      }
+      if (key.length > 512) return sendError(res, 422, 'INVALID_INPUT', 'key 长度不能超过 512');
+      if (!key.startsWith(`game/${userId}/`)) {
+        return sendError(res, 403, 'FORBIDDEN_KEY', 'key 必须以 game/<userId>/ 开头');
+      }
+      if (key.includes('..') || key.split('/').some((p) => p === '')) {
+        return sendError(res, 422, 'INVALID_INPUT', 'key 包含非法路径段');
+      }
+      await s3Client.send(new DeleteObjectCommand({ Bucket: MINIO_CONFIG.bucket, Key: key }));
+      sendJson(res, 200, { ok: true, key });
       return;
     }
 

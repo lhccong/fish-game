@@ -5,6 +5,15 @@ import { createDraftId } from './ids';
 import { findRoom, loadPackageSource } from './rooms';
 import { prepareCustomPackageRecord, resolveImportedCover } from './templates';
 import { validateMarketPackageSource, type MarketPackageSource } from './marketPackage';
+import { getCurrentUserId } from './currentUser';
+import {
+  filesToZip,
+  putBlobToUrl,
+  requestPresignedPut,
+  UploadHttpError,
+  UploadRequiresLoginError,
+  UploadUnavailableError,
+} from './uploadToMinio';
 
 export interface CustomRoomEntry {
   id: string;
@@ -48,7 +57,42 @@ export async function createRoomSnapshot(
       }
     }
   } else {
-    customRecord = await prepareCustomPackageRecord(options.input, options.source);
+    // 空白/编辑器创建：先在本地确定 customRecord.id，再走"打包 zip → presigned
+    // PUT → 直传 MinIO"通道。失败回落到纯本地（通道未配置时静默）。
+    // 同 manifest.id 再次保存：始终覆盖（与 importRoomFromZip 行为一致）。
+    const baseRecord = await prepareCustomPackageRecord(
+      options.input,
+      options.source,
+      { forcePreferredId: true },
+    );
+    let remoteKey: string | undefined;
+    try {
+      const userId = getCurrentUserId();
+      if (userId === 'anon') throw new UploadRequiresLoginError();
+      const zipBytes = filesToZip(baseRecord.files);
+      const zipBuffer = zipBytes.buffer.slice(zipBytes.byteOffset, zipBytes.byteOffset + zipBytes.byteLength) as ArrayBuffer;
+      const presigned = await requestPresignedPut({
+        userId,
+        templateId: baseRecord.id,
+        fileName: `${baseRecord.id}.zip`,
+        contentType: 'application/zip',
+      });
+      await putBlobToUrl(presigned.url, new Blob([zipBuffer], { type: 'application/zip' }));
+      remoteKey = presigned.key;
+    } catch (error) {
+      if (error instanceof UploadUnavailableError) {
+        remoteKey = undefined;
+      } else if (error instanceof UploadRequiresLoginError) {
+        // 未登录：把异常往上抛，由 UI 拦截提示登录。
+        throw error;
+      } else if (error instanceof UploadHttpError) {
+        console.warn('[customRooms] MinIO 上传失败，仅保存到本地', { code: error.code, message: error.message });
+        remoteKey = undefined;
+      } else {
+        throw error;
+      }
+    }
+    customRecord = remoteKey ? { ...baseRecord, remoteKey } : baseRecord;
     sourcePackage = await createPackage({ manifest: customRecord.manifest, files: customRecord.files });
     source = { type: 'custom', id: customRecord.id };
   }
