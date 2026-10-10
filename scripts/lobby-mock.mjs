@@ -7,7 +7,8 @@
  *   - POST /v1/rooms
  *   - PATCH /v1/rooms/:listingId
  *   - DELETE /v1/rooms/:listingId
- *   - POST /api/upload/presign   (用户上传 zip 用的 presigned PUT URL)
+ *   - POST /api/upload           (后端接收 zip 并写入 MinIO)
+ *   - POST /api/upload/presign   (兼容旧客户端的 presigned PUT URL)
  *   - POST /api/upload/delete    (用户删除本地模板时同步删 MinIO 文件)
  *
  * 租约 60 秒过期。
@@ -46,6 +47,8 @@ const PORT = Number.parseInt(process.env.PORT ?? '5158', 10) || 5158;
 const HOST = process.env.HOST ?? (IS_PRODUCTION ? '0.0.0.0' : '127.0.0.1');
 const LEASE_TTL_MS = 60_000;
 const MAX_BODY_BYTES = 12 * 1024;
+const MAX_UPLOAD_BYTES = Number.parseInt(process.env.MAX_UPLOAD_BYTES ?? String(100 * 1024 * 1024), 10)
+  || 100 * 1024 * 1024;
 const STORAGE_FILE = process.env.STORAGE_FILE ?? (IS_PRODUCTION ? './data/lobby.json' : '');
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',')
@@ -271,6 +274,38 @@ function readJsonBody(req) {
   });
 }
 
+function readBinaryBody(req, maxBytes = MAX_UPLOAD_BYTES) {
+  return new Promise((resolve, reject) => {
+    let total = 0;
+    const chunks = [];
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    req.on('data', (chunk) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        fail(Object.assign(new Error(`Upload body exceeds ${maxBytes} bytes`), {
+          status: 413,
+          code: 'UPLOAD_TOO_LARGE',
+        }));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (!settled) {
+        settled = true;
+        resolve(Buffer.concat(chunks));
+      }
+    });
+    req.on('error', fail);
+  });
+}
+
 const REQUIRED_FIELDS = [
   'roomId',
   'hostPeerId',
@@ -422,6 +457,47 @@ const server = createHttpServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/v1/health') {
       sendJson(res, 200, { ok: true, version: 1 });
+      return;
+    }
+
+    // === /api/upload ================================================
+    // 浏览器通过 HTTPS 把 zip 发到当前服务，服务端再用内部 MinIO endpoint 写入对象。
+    if (req.method === 'POST' && url.pathname === '/api/upload') {
+      if (!MINIO_ENABLED) {
+        return sendError(res, 503, 'UPLOAD_DISABLED', '服务端未配置 MinIO');
+      }
+      const userId = req.headers['x-upload-user-id'];
+      const templateId = req.headers['x-upload-template-id'];
+      const contentType = req.headers['content-type'];
+      const userErr = validateMinioUserId(userId);
+      if (userErr) {
+        const isAnon = userId === ANON_USER_ID;
+        return sendError(res, isAnon ? 401 : 422, isAnon ? 'UNAUTHENTICATED' : 'INVALID_INPUT', userErr);
+      }
+      const tplErr = validateMinioTemplateId(templateId);
+      if (tplErr) return sendError(res, 422, 'INVALID_INPUT', tplErr);
+      if (contentType && contentType.length > 128) {
+        return sendError(res, 422, 'INVALID_INPUT', 'Content-Type 不能超过 128 字符');
+      }
+
+      const body = await readBinaryBody(req);
+      if (body.length === 0) return sendError(res, 422, 'INVALID_INPUT', '上传文件不能为空');
+      const key = `game/${userId}/${templateId}.zip`;
+      await s3Client.send(new PutObjectCommand({
+        Bucket: MINIO_CONFIG.bucket,
+        Key: key,
+        Body: body,
+        ContentLength: body.length,
+        ContentType: contentType || 'application/zip',
+      }));
+      const publicUrl = MINIO_CONFIG.publicBase
+        ? `${MINIO_CONFIG.publicBase}/${key}`
+        : undefined;
+      sendJson(res, 200, {
+        key,
+        bucket: MINIO_CONFIG.bucket,
+        ...(publicUrl ? { publicUrl } : {}),
+      });
       return;
     }
 

@@ -13,8 +13,7 @@ import type { RoomPackageInput } from '@parti/room-packager';
 import { prepareCustomPackageRecord, saveImportedTemplate } from './templates';
 import { getCurrentUserId } from './currentUser';
 import {
-  putBlobToUrl,
-  requestPresignedPut,
+  uploadBlobToBackend,
   UploadHttpError,
   UploadRequiresLoginError,
   UploadUnavailableError,
@@ -49,7 +48,7 @@ export async function unzipRoomPackage(
  * 流程：
  *   1) 浏览器先解压并校验 ZIP（保持现有"导入即校验"语义）。
  *   2) 准备 CustomPackageRecord，确定最终 templateId（与 IndexedDB 主键一致）。
- *   3) 拿原始 zip 字节走"后端 presigned URL → 直传 MinIO"，key 形如
+ *   3) 把原始 zip 通过 HTTPS 发给后端，由后端写入 MinIO，key 形如
  *      game/<userId>/<templateId>.zip。
  *   4) 把 record（含 remoteKey）put 到 customPackages store。
  *
@@ -70,14 +69,14 @@ export async function importRoomFromZip(file: File): Promise<string> {
   try {
     const userId = getCurrentUserId();
     if (userId === 'anon') throw new UploadRequiresLoginError();
-    const presigned = await requestPresignedPut({
+    const uploaded = await uploadBlobToBackend({
       userId,
       templateId: record.id,
       fileName: file.name,
+      blob: file,
       contentType: 'application/zip',
     });
-    await putBlobToUrl(presigned.url, file, { contentType: 'application/zip' });
-    remoteKey = presigned.key;
+    remoteKey = uploaded.key;
   } catch (error) {
     if (error instanceof UploadUnavailableError) {
       // 通道未配置：开发环境或离线时静默回落到纯本地。

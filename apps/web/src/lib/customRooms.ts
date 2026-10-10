@@ -8,8 +8,7 @@ import { validateMarketPackageSource, type MarketPackageSource } from './marketP
 import { getCurrentUserId } from './currentUser';
 import {
   filesToZip,
-  putBlobToUrl,
-  requestPresignedPut,
+  uploadBlobToBackend,
   UploadHttpError,
   UploadRequiresLoginError,
   UploadUnavailableError,
@@ -61,8 +60,8 @@ export async function createRoomSnapshot(
       }
     }
   } else {
-    // 空白/编辑器创建：先在本地确定 customRecord.id，再走"打包 zip → presigned
-    // PUT → 直传 MinIO"通道。失败回落到纯本地（通道未配置时静默）。
+    // 空白/编辑器创建：先在本地确定 customRecord.id，再走"打包 zip → HTTPS
+    // 后端 → MinIO"通道。失败回落到纯本地（通道未配置时静默）。
     // 同 manifest.id 再次保存：始终覆盖（与 importRoomFromZip 行为一致）。
     const baseRecord = await prepareCustomPackageRecord(
       options.input,
@@ -76,20 +75,20 @@ export async function createRoomSnapshot(
       if (userId === 'anon') throw new UploadRequiresLoginError();
       const zipBytes = filesToZip(baseRecord.files);
       const zipBuffer = zipBytes.buffer.slice(zipBytes.byteOffset, zipBytes.byteOffset + zipBytes.byteLength) as ArrayBuffer;
-      const presigned = await requestPresignedPut({
+      const uploaded = await uploadBlobToBackend({
         userId,
         templateId: baseRecord.id,
         fileName: `${baseRecord.id}.zip`,
         contentType: 'application/zip',
+        blob: new Blob([zipBuffer], { type: 'application/zip' }),
       });
-      await putBlobToUrl(presigned.url, new Blob([zipBuffer], { type: 'application/zip' }));
-      remoteKey = presigned.key;
-      // publicUrl 是 lobby-mock 在 presign 阶段根据 MINIO_PUBLIC_BASE 拼出来的
+      remoteKey = uploaded.key;
+      // publicUrl 是 lobby-mock 根据 MINIO_PUBLIC_BASE 拼出来的
       // 直链。joiner 拿这个直链 fetch MinIO 拿 zip —— 不依赖签名过期、可
       // 长期使用，访问控制由 MinIO bucket 策略 + P2P 准入完成。publicUrl
       // 可选：dev 环境如果 MINIO_PUBLIC_BASE 没配（默认指向 127.0.0.1，
       // 其它机器不可达），joiner 端会走 fallback。
-      remotePublicUrl = presigned.publicUrl;
+      remotePublicUrl = uploaded.publicUrl;
     } catch (error) {
       if (error instanceof UploadUnavailableError) {
         remoteKey = undefined;

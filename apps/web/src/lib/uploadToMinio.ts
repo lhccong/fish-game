@@ -1,9 +1,9 @@
 /**
- * 把用户上传的 zip 走"后端给 presigned URL → 浏览器直传 MinIO"通道。
+ * 把用户上传的 zip 走"浏览器 → HTTPS 后端 → MinIO"通道。
  *
  * 职责：
- *   1) 调 lobby-mock 的 POST /api/upload/presign 拿一次性 PUT URL。
- *   2) 浏览器 fetch/XHR 直传 zip body（带进度回调）。
+ *   1) 浏览器通过 HTTPS POST /api/upload 把 zip 发给后端。
+ *   2) 后端使用内部 MinIO 配置写入对象。
  *   3) 失败时调 POST /api/upload/delete 清理已上传的孤立文件。
  *
  * 不做的事：
@@ -14,13 +14,11 @@
  */
 import { lobbyServiceUrl } from './lobbyApi';
 
-export interface PresignedUpload {
-  url: string;
+export interface UploadedObject {
   key: string;
   bucket: string;
-  expiresIn: number;
   /**
-   * joiner 直拉 MinIO 用的公开直链（来自 lobby-mock 的 MINIO_PUBLIC_BASE）。
+   * joiner 端使用的公开直链（来自 lobby-mock 的 MINIO_PUBLIC_BASE）。
    * 如果服务端没配 publicBase，joiner 端就需要走 fallback（例如 P2P inline
    * base64）。访问控制全部交给 MinIO bucket 策略 + P2P 准入。
    */
@@ -87,22 +85,6 @@ async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): P
   return data as T;
 }
 
-export async function requestPresignedPut(
-  params: { userId: string; templateId: string; fileName: string; contentType?: string },
-  signal?: AbortSignal,
-): Promise<PresignedUpload> {
-  return postJson<PresignedUpload>(
-    '/api/upload/presign',
-    {
-      userId: params.userId,
-      templateId: params.templateId,
-      fileName: params.fileName,
-      ...(params.contentType ? { contentType: params.contentType } : {}),
-    },
-    signal,
-  );
-}
-
 export async function deleteRemoteKey(
   params: { userId: string; key: string },
   signal?: AbortSignal,
@@ -120,7 +102,7 @@ export interface DownloadUrl {
 /**
  * 给 joiner 申请一次性的 GET presigned URL —— 直拉 MinIO 拿到 zip 字节。
  *
- * 与 requestPresignedPut 镜像的鉴权/错误模型：userId='anon' 一律 401，通道
+ * 与上传接口一致的鉴权/错误模型：userId='anon' 一律 401，通道
  * 未配置抛 UploadUnavailableError 让上层选择回退到本地 base64。key 服务端
  * 会强制 `game/<userId>/` 前缀，浏览器无需重复校验。
  */
@@ -131,60 +113,81 @@ export async function getRemoteDownloadUrl(
   return postJson<DownloadUrl>('/api/upload/get', params, signal);
 }
 
-/**
- * 通过 XHR 上传 blob 以拿到进度；fetch 至今没有标准的 upload progress。
- * XHR 失败时（presigned URL 失效、网络断等）尝试调删除接口清掉孤儿对象。
- */
-export function putBlobToUrl(
-  url: string,
-  blob: Blob,
-  options: { contentType?: string; onProgress?: (loaded: number, total: number) => void } = {},
-): Promise<void> {
+export function uploadBlobToBackend(
+  params: {
+    userId: string;
+    templateId: string;
+    fileName: string;
+    blob: Blob;
+    contentType?: string;
+    onProgress?: (loaded: number, total: number) => void;
+    signal?: AbortSignal;
+  },
+): Promise<UploadedObject> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', url, true);
-    if (options.contentType) xhr.setRequestHeader('Content-Type', options.contentType);
+    xhr.open('POST', `${backendBase()}/api/upload`, true);
+    xhr.setRequestHeader('Content-Type', params.contentType ?? 'application/zip');
+    xhr.setRequestHeader('X-Upload-User-Id', params.userId);
+    xhr.setRequestHeader('X-Upload-Template-Id', params.templateId);
+    if (params.signal) {
+      params.signal.addEventListener('abort', () => xhr.abort(), { once: true });
+    }
     xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) options.onProgress?.(event.loaded, event.total);
+      if (event.lengthComputable) params.onProgress?.(event.loaded, event.total);
     };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new UploadHttpError(`PUT failed: ${xhr.status} ${xhr.statusText}`, xhr.status));
+    xhr.onload = async () => {
+      let data: UploadedObject & { error?: { code?: string; message?: string } } | undefined;
+      try {
+        data = JSON.parse(xhr.responseText) as typeof data;
+      } catch {
+        // 非 JSON 错误响应
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new UploadHttpError(
+          data?.error?.message ?? `HTTP ${xhr.status}`,
+          xhr.status,
+          data?.error?.code,
+        ));
+        return;
+      }
+      if (!data?.key || !data.bucket) {
+        reject(new UploadHttpError('上传接口返回数据无效', xhr.status));
+        return;
+      }
+      resolve(data);
     };
-    xhr.onerror = () => reject(new UploadHttpError('网络错误，PUT 失败', 0));
+    xhr.onerror = () => reject(new UploadHttpError('网络错误，上传失败', 0));
     xhr.onabort = () => reject(new UploadHttpError('上传已取消', 0));
-    xhr.send(blob);
+    xhr.send(params.blob);
   });
 }
 
 /**
- * 一站式：申请 URL → 直传 → 失败时回滚删除。
- * 上传成功时返回 PresignedUpload（含 key），供调用方写 IndexedDB。
+ * 一站式：后端上传 → 失败时回滚删除。
+ * 上传成功时返回对象信息，供调用方写 IndexedDB。
  */
-export async function uploadZipToMinio(options: UploadOptions): Promise<PresignedUpload> {
-  const presigned = await requestPresignedPut({
-    userId: options.userId,
-    templateId: options.templateId,
-    fileName: options.fileName,
-    contentType: options.contentType ?? 'application/zip',
-  }, options.signal);
-
+export async function uploadZipToMinio(options: UploadOptions): Promise<UploadedObject> {
   try {
-    await putBlobToUrl(presigned.url, options.blob, {
+    return await uploadBlobToBackend({
+      userId: options.userId,
+      templateId: options.templateId,
+      fileName: options.fileName,
+      blob: options.blob,
       contentType: options.contentType ?? 'application/zip',
+      signal: options.signal,
       onProgress: options.onProgress,
     });
   } catch (error) {
     // 失败时尽力清掉孤儿文件，但失败不抛给上层（用户已经看到上传失败）。
     try {
-      await deleteRemoteKey({ userId: options.userId, key: presigned.key });
+      const key = `game/${options.userId}/${options.templateId}.zip`;
+      await deleteRemoteKey({ userId: options.userId, key });
     } catch {
       /* 清理失败忽略 */
     }
     throw error;
   }
-
-  return presigned;
 }
 
 // === 极简 store-only zip 打包器 =====================================

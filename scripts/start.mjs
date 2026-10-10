@@ -44,6 +44,8 @@ const rootDir   = resolve(__dirname, '..');
 const PORT            = Number.parseInt(process.env.PORT ?? '5157', 10) || 5157;
 const HOST            = process.env.HOST ?? '0.0.0.0';
 const LOBBY_INTERNAL  = Number.parseInt(process.env.LOBBY_INTERNAL ?? '5158', 10) || 5158;
+const MAX_UPLOAD_BYTES = Number.parseInt(process.env.MAX_UPLOAD_BYTES ?? String(100 * 1024 * 1024), 10)
+  || 100 * 1024 * 1024;
 const STATIC_DIR      = resolve(rootDir, process.env.STATIC_DIR ?? 'apps/web/dist');
 // 默认持久化到 ./data/lobby.json；data/ 已被 .gitignore 忽略，不会入仓。
 const LOBBY_STORAGE   = process.env.LOBBY_STORAGE_FILE
@@ -96,14 +98,14 @@ async function serveFile(urlPath, res) {
   return false;
 }
 
-function proxyToLobby(req, res) {
+function proxyToLobby(req, res, maxBodyBytes = 1024 * 1024) {
   return new Promise((resolve) => {
     const chunks = [];
     let total = 0;
     let aborted = false;
     req.on('data', (chunk) => {
       total += chunk.length;
-      if (total > 1024 * 1024) { aborted = true; req.destroy(); }
+      if (total > maxBodyBytes) { aborted = true; req.destroy(); }
       else chunks.push(chunk);
     });
     req.on('end', () => {
@@ -258,8 +260,8 @@ const server = createHttpServer(async (req, res) => {
 
   // /api/upload/* → lobby mock（presign/delete）
   // 上传接口和大厅目录接口都由 lobby-mock 提供，不能落到 OAuth2 /api 路由。
-  if (url.pathname.startsWith('/api/upload/')) {
-    await proxyToLobby(req, res);
+  if (url.pathname === '/api/upload' || url.pathname.startsWith('/api/upload/')) {
+    await proxyToLobby(req, res, MAX_UPLOAD_BYTES);
     return;
   }
 
