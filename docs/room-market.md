@@ -48,7 +48,12 @@ beta/推荐徽章）→ 点击「安装」→ 经 jsdelivr 拉取房间包、校
 WebSocket 同步操作和状态，不通过房主传游戏文件，也不要求玩家能直连房主网络。
 房主仍需在线运行游戏逻辑。市场下载失败或哈希不符会报错，不回退为房主传包。
 旧安装未记录固定下载来源时，需重新安装市场游戏并创建新房间；不进行数据迁移。
-自行编辑市场副本、ZIP 导入及个人上传仍走自定义游戏流程，本次未增加云端上传。
+ZIP 导入与个人上传走 MinIO 下载通道：房主在创建房间时
+`{ manifest, packageHash, customRemote }` 形式的 `sys:package-data` 仅携带
+`{ uploadBackend, key }`，加入者经 lobby-mock `POST /api/upload/get` 拿一次性
+GET presigned URL 从 MinIO 拉 zip，重算哈希后走 `sys:hello`，与市场/内置
+游戏走相同的下载模式。下载失败不回退到房主发包；未带 `remoteKey` 的旧
+自定义安装需重新上传后再建房。
 市场卡片也可先点击选中，再使用右上角的分享按钮复制链接并唤起浏览器 Web Share。
 
 ## 2. 发布步骤（作者 / AI agent）

@@ -14,6 +14,10 @@ import {
   UploadRequiresLoginError,
   UploadUnavailableError,
 } from './uploadToMinio';
+import { type CustomRemoteDownload, validateCustomRemote } from './customRemote';
+
+export type { CustomRemoteDownload };
+export { validateCustomRemote };
 
 export interface CustomRoomEntry {
   id: string;
@@ -133,12 +137,36 @@ export async function loadRoomSnapshot(roomId: string): Promise<RoomPackage> {
 
 export type RoomDownloadSource =
   | { builtinSourceId: string }
-  | { marketSource: MarketPackageSource };
+  | { marketSource: MarketPackageSource }
+  | { customRemote: CustomRemoteDownload };
 
 export async function loadRoomDownloadSource(roomId: string): Promise<RoomDownloadSource | undefined> {
   const record = await (await getDb()).get('roomSnapshots', roomId);
   if (record?.source.type === 'builtin') return { builtinSourceId: record.source.id };
   if (record?.marketPackage) return { marketSource: validateMarketPackageSource(record.marketPackage) };
+  // 用户上传 / 编辑器创建：customPackages store 里有 remoteKey（MinIO 对象 key）。
+  // 这里只读自己机器的 IndexedDB，不来自网络，因此可以直接信任。
+  // hostUserId 来自 *房主* 自己的当前登录身份 —— 调用方是 host 浏览器（详见
+  // PeerRoomSession.createPeerHost），不是 joiner 浏览器。
+  if (record?.source.type === 'custom') {
+    const custom = await (await getDb()).get('customPackages', record.source.id);
+    if (custom?.remoteKey) {
+      const hostUserId = getCurrentUserId();
+      if (hostUserId === 'anon') {
+        // 没登录却建了带 remoteKey 的房间：与文档"未登录无法上传"一致，
+        // 这种状态不应当存在；如果发生了，直接当没下载源，让 joiner 端走
+        // 旧 base64 路径并报错"请房主重新登录后建房"，比暴露 anon 模糊错误好。
+        return undefined;
+      }
+      return {
+        customRemote: {
+          uploadBackend: '/api/upload/get',
+          hostUserId,
+          key: custom.remoteKey,
+        },
+      };
+    }
+  }
   return undefined;
 }
 

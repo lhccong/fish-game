@@ -105,6 +105,27 @@ export async function deleteRemoteKey(
   await postJson<{ ok: true }>('/api/upload/delete', params, signal);
 }
 
+export interface DownloadUrl {
+  url: string;
+  key: string;
+  bucket: string;
+  expiresIn: number;
+}
+
+/**
+ * 给 joiner 申请一次性的 GET presigned URL —— 直拉 MinIO 拿到 zip 字节。
+ *
+ * 与 requestPresignedPut 镜像的鉴权/错误模型：userId='anon' 一律 401，通道
+ * 未配置抛 UploadUnavailableError 让上层选择回退到本地 base64。key 服务端
+ * 会强制 `game/<userId>/` 前缀，浏览器无需重复校验。
+ */
+export async function getRemoteDownloadUrl(
+  params: { userId: string; key: string },
+  signal?: AbortSignal,
+): Promise<DownloadUrl> {
+  return postJson<DownloadUrl>('/api/upload/get', params, signal);
+}
+
 /**
  * 通过 XHR 上传 blob 以拿到进度；fetch 至今没有标准的 upload progress。
  * XHR 失败时（presigned URL 失效、网络断等）尝试调删除接口清掉孤儿对象。
