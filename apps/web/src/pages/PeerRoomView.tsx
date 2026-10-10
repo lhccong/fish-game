@@ -15,7 +15,7 @@ import {
   clearRoomSession,
   registerRoomDisposer,
 } from '../lib/PeerRoomSession';
-import { loadRoomSnapshot } from '../lib/customRooms';
+import { loadRoomCover, loadRoomSnapshot } from '../lib/customRooms';
 import { FetchPackageError, fetchPackageOverPeer } from '../lib/fetchPackageOverPeer';
 import {
   createPasswordAdmissionController,
@@ -89,11 +89,15 @@ export function PeerRoomView() {
 function PeerHostView({ roomId, transportConfig }: { roomId?: string; transportConfig: TransportConfig }) {
   const intl = useIntl();
   const [pkg, setPkg] = useState<RoomPackage | null>(null);
+  const [cover, setCover] = useState<string>();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!roomId) return;
-    loadRoomSnapshot(roomId).then(setPkg).catch((reason) => {
+    Promise.all([loadRoomSnapshot(roomId), loadRoomCover(roomId).catch(() => undefined)]).then(([next, image]) => {
+      setCover(image);
+      setPkg(next);
+    }).catch((reason) => {
       setError(formatResolveError(intl, reason));
     });
   }, [intl, roomId]);
@@ -112,15 +116,17 @@ function PeerHostView({ roomId, transportConfig }: { roomId?: string; transportC
     isPublic: true,
     replayEnabled: false,
   };
-  return <PeerHostSession pkg={pkg} initialSettings={initialSettings} transportConfig={transportConfig} />;
+  return <PeerHostSession pkg={pkg} cover={cover} initialSettings={initialSettings} transportConfig={transportConfig} />;
 }
 
 function PeerHostSession({
   pkg,
+  cover,
   initialSettings,
   transportConfig,
 }: {
   pkg: RoomPackage;
+  cover: string | undefined;
   initialSettings: HostRoomSettings;
   transportConfig: TransportConfig;
 }) {
@@ -210,7 +216,7 @@ function PeerHostSession({
           registerRoomDisposer(roomId, () => void publisher.unpublish());
           if (initialSettings.isPublic) {
             void publisher.publish(
-              lobbyInput(pkg, peerHost.hostPeerId, transportConfig, initialSettings, peerHost.host.getAdmissionStatus(), peerHost.host.players.list()),
+              lobbyInput(pkg, peerHost.hostPeerId, transportConfig, initialSettings, peerHost.host.getAdmissionStatus(), peerHost.host.players.list(), cover),
             ).catch((reason) => {
               setLobbyError(reason instanceof Error ? reason.message : String(reason));
             });
@@ -228,7 +234,7 @@ function PeerHostSession({
           if (transportConfig.adapter === 'lan') {
             lanPublicationRef.current?.update(current.isPublic ? lanAnnouncement(pkg, current, status) : null);
           } else if (current.isPublic && publisherRef.current) {
-            void publisherRef.current.sync(lobbyInput(pkg, peerHost.hostPeerId, transportConfig, current, status, peerHost.host.players.list()));
+            void publisherRef.current.sync(lobbyInput(pkg, peerHost.hostPeerId, transportConfig, current, status, peerHost.host.players.list(), cover));
           }
         });
       })
@@ -307,7 +313,7 @@ function PeerHostSession({
     const current = settingsRef.current;
     if (!current.isPublic) return;
     void publisherRef.current.sync(
-      lobbyInput(pkg, state.hostPeerId, transportConfig, current, state.host.getAdmissionStatus(), state.host.players.list()),
+      lobbyInput(pkg, state.hostPeerId, transportConfig, current, state.host.getAdmissionStatus(), state.host.players.list(), cover),
     );
     lastLobbySyncAtRef.current = Date.now();
   }
@@ -387,7 +393,7 @@ function PeerHostSession({
       });
       publisherRef.current = publisher;
       try {
-        await publisher.publish(lobbyInput(pkg, state.hostPeerId, transportConfig, settings, admission, state.host.players.list()));
+        await publisher.publish(lobbyInput(pkg, state.hostPeerId, transportConfig, settings, admission, state.host.players.list(), cover));
         lastLobbySyncAtRef.current = Date.now();
         applySettings({ ...settings, isPublic: true }, { skipLobbySync: true });
       } catch (reason) {
@@ -783,6 +789,7 @@ function lobbyInput(
   settings: HostRoomSettings,
   admission: RoomAdmissionStatus,
   players: Array<{ clientId?: string }> = [],
+  cover?: string,
 ): LobbyRoomInput {
   return {
     roomId: pkg.manifest.id,
@@ -791,6 +798,7 @@ function lobbyInput(
     transportConfig,
     title: settings.title.trim() || pkg.manifest.name,
     packageName: pkg.manifest.name,
+    ...(cover ? { metadata: { cover } } : {}),
     playerCount: admission.activePlayers,
     maxPlayers: admission.maxPlayers,
     joinable: admission.joinable,

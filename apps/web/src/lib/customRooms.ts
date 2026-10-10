@@ -3,7 +3,7 @@ import { createPackage, type RoomPackage, type RoomPackageInput } from '@parti/r
 import { getDb, type PackageSourceInfo, type RoomSnapshotRecord } from './db';
 import { createDraftId } from './ids';
 import { findRoom, loadPackageSource } from './rooms';
-import { prepareCustomPackageRecord } from './templates';
+import { prepareCustomPackageRecord, resolveImportedCover } from './templates';
 
 export interface CustomRoomEntry {
   id: string;
@@ -75,6 +75,46 @@ export async function loadRoomSnapshot(roomId: string): Promise<RoomPackage> {
   const record = await (await getDb()).get('roomSnapshots', roomId);
   if (!record) throw new RoomSnapshotNotFoundError(roomId);
   return { manifest: record.manifest, files: record.files, packageHash: record.packageHash };
+}
+
+export async function loadRoomCover(roomId: string): Promise<string | undefined> {
+  const record = await (await getDb()).get('roomSnapshots', roomId);
+  if (!record) return undefined;
+  if (record.source.type === 'builtin') {
+    const cover = findRoom(record.source.id)?.cover;
+    if (cover) return new URL(cover, window.location.href).href;
+  }
+  const cover = resolveImportedCover(record.manifest.cover, record.files);
+  if (!cover) return undefined;
+  if (!cover.startsWith('data:')) return new URL(cover, window.location.href).href;
+  // Keep embedded artwork below the lobby metadata limit.
+  return new Promise((resolve) => {
+    const image = new Image();
+    const timer = setTimeout(() => resolve(undefined), 5000);
+    image.onerror = () => { clearTimeout(timer); resolve(undefined); };
+    image.onload = () => {
+      clearTimeout(timer);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 160;
+        canvas.height = 100;
+        const context = canvas.getContext('2d');
+        if (!context) { resolve(undefined); return; }
+        const scale = Math.min(160 / image.width, 100 / image.height);
+        const width = image.width * scale;
+        const height = image.height * scale;
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, 160, 100);
+        context.drawImage(image, (160 - width) / 2, (100 - height) / 2, width, height);
+        for (const quality of [0.75, 0.5, 0.3]) {
+          const thumbnail = canvas.toDataURL('image/jpeg', quality);
+          if (thumbnail.length <= 6000) { resolve(thumbnail); return; }
+        }
+        resolve(undefined);
+      } catch { resolve(undefined); }
+    };
+    image.src = cover;
+  });
 }
 
 export async function listCustomRooms(): Promise<CustomRoomEntry[]> {

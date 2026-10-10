@@ -16,6 +16,24 @@ import { buildJoinHashRoute, navigateToPeerJoin } from '../lib/peerRoutes';
 import { loadLocalUser } from '../lib/localUser';
 import { ENABLE_REPLAYS } from '../lib/featureFlags';
 
+function RoomCover({ src }: { src: string | undefined }) {
+  const [failed, setFailed] = useState(false);
+  const showCover = Boolean(src) && !failed;
+  return (
+    <div className="flex aspect-video w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg sm:w-36">
+      <img
+        src={showCover ? src : '/moyu.png'}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className={showCover
+          ? 'size-full object-cover'
+          : 'h-full w-auto max-w-full rounded-lg object-contain'}
+      />
+    </div>
+  );
+}
+
 /** 面向玩家的在线大厅。创作草稿与开发预览不在这里展示。 */
 export function Lobby() {
   const intl = useIntl();
@@ -152,7 +170,10 @@ export function Lobby() {
                   key={room.listingId}
                 >
                   <CardHeader className="flex items-center gap-4 px-5">
-                    <img src="/moyu.png" alt="" className="size-16 shrink-0 rounded-lg object-cover sm:size-20" />
+                    <RoomCover
+                      key={typeof room.metadata?.cover === 'string' ? room.metadata.cover : 'default'}
+                      src={typeof room.metadata?.cover === 'string' ? room.metadata.cover : undefined}
+                    />
                     <div className="min-w-0 flex-1">
                       <CardTitle className="text-lg leading-7 break-words">{room.title}</CardTitle>
                       <CardDescription className="mt-1 break-all">{room.packageName}</CardDescription>
