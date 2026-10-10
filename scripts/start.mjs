@@ -256,6 +256,13 @@ const server = createHttpServer(async (req, res) => {
     return;
   }
 
+  // /api/upload/* → lobby mock（presign/delete）
+  // 上传接口和大厅目录接口都由 lobby-mock 提供，不能落到 OAuth2 /api 路由。
+  if (url.pathname.startsWith('/api/upload/')) {
+    await proxyToLobby(req, res);
+    return;
+  }
+
   // /api/* → OAuth2 express app（必须在静态/SPA fallback 之前，否则会返回 HTML）
   if (url.pathname.startsWith('/api/')) {
     if (authApp) {
