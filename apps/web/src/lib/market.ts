@@ -15,6 +15,7 @@ import {
 } from '@parti/room-source';
 import { saveImportedTemplate } from './templates';
 import { getDb } from './db';
+import { validateMarketPackageSource } from './marketPackage';
 import {
   MARKET_GATE_LABEL,
   marketBadgesFromLabels,
@@ -297,7 +298,7 @@ export async function listInstalledMarketRefs(): Promise<Set<string>> {
 
 /**
  * 下载并安装市场模版：经 jsdelivr 读取发布仓库中的房间包文件
- * （不消耗 GitHub API 配额），返回保存后的模版 id。
+ * （安装时通过 GitHub API 固定 commit），返回保存后的模版 id。
  */
 export async function installMarketTemplate(
   entry: MarketRepoRef & { packageDir?: string; manifest?: RoomManifest; source?: MarketRoomSourceMetadata },
@@ -308,13 +309,20 @@ export async function installMarketTemplate(
   const client = new GitHubSourceClient();
   const source = entry.source?.primary.kind === 'git-folder' ? entry.source.primary : undefined;
   const gitRef = source?.ref ?? entry.tag ?? await client.defaultBranch(entry);
-  const scope = source?.packageDir ?? '.';
+  const commit = await client.resolveCommit(entry, gitRef);
+  const scope = source?.packageDir ?? entry.packageDir ?? '.';
   const resolved = await client.resolveRepository({
     owner: entry.owner,
     repo: entry.repo,
-    ref: gitRef,
+    ref: commit,
     scope,
     explicitRef: Boolean(source?.ref ?? entry.tag),
   });
-  return saveImportedTemplate(resolved.input, { type: 'market', ref: marketRefString(entry) });
+  const download = validateMarketPackageSource({
+    owner: entry.owner,
+    repo: entry.repo,
+    commit,
+    packageDir: resolved.candidate.packageDir,
+  });
+  return saveImportedTemplate(resolved.input, { type: 'market', ref: marketRefString(entry), download });
 }

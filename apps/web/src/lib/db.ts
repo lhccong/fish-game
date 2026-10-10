@@ -1,11 +1,12 @@
 /** Room Package 两阶段存储。内置模板不进入此数据库。 */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { RoomManifest } from '@parti/room-packager';
+import type { MarketPackageSource } from './marketPackage';
 
 export type PackageSourceInfo =
   | { type: 'zip'; ref?: string }
   | { type: 'github'; ref?: string }
-  | { type: 'market'; ref?: string }
+  | { type: 'market'; ref?: string; download?: MarketPackageSource }
   | { type: 'editor'; basedOn?: string }
   | { type: 'builtin'; id: string }
   | { type: 'custom'; id: string };
@@ -24,6 +25,7 @@ export interface RoomSnapshotRecord {
   files: Record<string, Uint8Array>;
   packageHash: string;
   source: PackageSourceInfo;
+  marketPackage?: MarketPackageSource;
   target: 'local' | 'peer';
   createdAt: number;
 }

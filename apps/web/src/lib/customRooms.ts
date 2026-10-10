@@ -4,6 +4,7 @@ import { getDb, type PackageSourceInfo, type RoomSnapshotRecord } from './db';
 import { createDraftId } from './ids';
 import { findRoom, loadPackageSource } from './rooms';
 import { prepareCustomPackageRecord, resolveImportedCover } from './templates';
+import { validateMarketPackageSource, type MarketPackageSource } from './marketPackage';
 
 export interface CustomRoomEntry {
   id: string;
@@ -32,12 +33,20 @@ export async function createRoomSnapshot(
   let sourcePackage: RoomPackage;
   let source: PackageSourceInfo;
   let customRecord;
+  let marketPackage: MarketPackageSource | undefined;
 
   if ('sourceId' in options) {
     sourcePackage = await loadPackageSource(options.sourceId);
     source = findRoom(options.sourceId)
       ? { type: 'builtin', id: options.sourceId }
       : { type: 'custom', id: options.sourceId };
+    if (source.type === 'custom') {
+      const template = await (await getDb()).get('customPackages', source.id);
+      if (template?.source.type === 'market') {
+        if (!template.source.download) throw new Error('Please reinstall this market game before creating a room.');
+        marketPackage = validateMarketPackageSource(template.source.download);
+      }
+    }
   } else {
     customRecord = await prepareCustomPackageRecord(options.input, options.source);
     sourcePackage = await createPackage({ manifest: customRecord.manifest, files: customRecord.files });
@@ -58,6 +67,7 @@ export async function createRoomSnapshot(
     files: snapshotPackage.files,
     packageHash: snapshotPackage.packageHash,
     source,
+    ...(marketPackage ? { marketPackage } : {}),
     target: options.target,
     createdAt: Date.now(),
   };
@@ -77,9 +87,15 @@ export async function loadRoomSnapshot(roomId: string): Promise<RoomPackage> {
   return { manifest: record.manifest, files: record.files, packageHash: record.packageHash };
 }
 
-export async function loadBuiltinSourceId(roomId: string): Promise<string | undefined> {
+export type RoomDownloadSource =
+  | { builtinSourceId: string }
+  | { marketSource: MarketPackageSource };
+
+export async function loadRoomDownloadSource(roomId: string): Promise<RoomDownloadSource | undefined> {
   const record = await (await getDb()).get('roomSnapshots', roomId);
-  return record?.source.type === 'builtin' ? record.source.id : undefined;
+  if (record?.source.type === 'builtin') return { builtinSourceId: record.source.id };
+  if (record?.marketPackage) return { marketSource: validateMarketPackageSource(record.marketPackage) };
+  return undefined;
 }
 
 export async function loadRoomCover(roomId: string): Promise<string | undefined> {

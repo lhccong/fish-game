@@ -188,6 +188,21 @@ export class GitHubSourceClient {
     return null;
   }
 
+  async resolveCommit(repo: GitHubRepoRef, ref: string): Promise<string> {
+    const response = await this.request(
+      `https://api.github.com/repos/${repo.owner}/${repo.repo}/commits/${encodeURIComponent(ref)}`,
+      { headers: apiHeaders(this.token) },
+    );
+    if (rateLimited(response)) throw new RoomSourceError('GITHUB_RATE_LIMITED', { status: response.status });
+    if (response.status === 404) throw new RoomSourceError('GITHUB_REF_NOT_FOUND', { status: response.status });
+    if (!response.ok) throw new RoomSourceError('GITHUB_TREE_FAILED', { status: response.status });
+    const data = await response.json() as { sha?: string };
+    if (typeof data.sha !== 'string' || !/^[a-f0-9]{40}$/.test(data.sha)) {
+      throw new RoomSourceError('GITHUB_REF_NOT_FOUND');
+    }
+    return data.sha;
+  }
+
   async refExists(repo: GitHubRepoRef, ref: string): Promise<boolean> {
     return (await this.resolveRefKind(repo, ref)) !== null;
   }

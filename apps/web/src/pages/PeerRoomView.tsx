@@ -15,7 +15,7 @@ import {
   clearRoomSession,
   registerRoomDisposer,
 } from '../lib/PeerRoomSession';
-import { loadRoomCover, loadRoomSnapshot } from '../lib/customRooms';
+import { loadRoomCover, loadRoomSnapshot, loadRoomDownloadSource } from '../lib/customRooms';
 import { FetchPackageError, fetchPackageOverPeer, type PackageJoinStage } from '../lib/fetchPackageOverPeer';
 import {
   createPasswordAdmissionController,
@@ -90,12 +90,14 @@ function PeerHostView({ roomId, transportConfig }: { roomId?: string; transportC
   const intl = useIntl();
   const [pkg, setPkg] = useState<RoomPackage | null>(null);
   const [cover, setCover] = useState<string>();
+  const [marketRoom, setMarketRoom] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!roomId) return;
-    Promise.all([loadRoomSnapshot(roomId), loadRoomCover(roomId).catch(() => undefined)]).then(([next, image]) => {
+    Promise.all([loadRoomSnapshot(roomId), loadRoomCover(roomId).catch(() => undefined), loadRoomDownloadSource(roomId)]).then(([next, image, source]) => {
       setCover(image);
+      setMarketRoom(Boolean(source && 'marketSource' in source));
       setPkg(next);
     }).catch((reason) => {
       setError(formatResolveError(intl, reason));
@@ -116,8 +118,10 @@ function PeerHostView({ roomId, transportConfig }: { roomId?: string; transportC
     isPublic: true,
     replayEnabled: false,
   };
-  return <PeerHostSession pkg={pkg} cover={cover} initialSettings={initialSettings} transportConfig={transportConfig} />;
+  return <PeerHostSession pkg={pkg} cover={cover} initialSettings={initialSettings} transportConfig={marketRoom ? MARKET_TRANSPORT : transportConfig} />;
 }
+
+const MARKET_TRANSPORT: TransportConfig = { adapter: 'relay' };
 
 function PeerHostSession({
   pkg,

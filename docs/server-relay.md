@@ -26,6 +26,13 @@
 自建、导入的游戏保留 `{ manifest, files }` 下载及正式加入时的哈希校验；
 选择服务器同步时，这些包经服务器转发，不需要 WebRTC。
 
+从市场安装、未经编辑的游戏发送 `{ manifest, packageHash, marketSource }`，
+其中 `marketSource` 包含 `owner`、`repo`、固定的 `commit` 和 `packageDir`。
+玩家从该提交的市场仓库 CDN 下载包，再使用房主 manifest 校验哈希，不拉房主文件。
+市场房间固定使用 Relay，邀请、大厅展示和加入使用同一配置；不受旧的 PeerJS 偏好影响。
+下载失败不回退到房主发包。未记录固定来源的旧市场安装需重新安装后建房。
+用户自行上传、编辑、ZIP 导入暂不接入 MinIO 或其他对象存储。
+
 ## 部署
 
 `npm run dev` / `npm run dev:web` 的 Vite 服务、`npm run preview` 及

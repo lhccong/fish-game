@@ -29,7 +29,7 @@ import { clearHostRoomSettings } from './roomSettings';
 import { loadLocalUser } from './localUser';
 import { localUserToEffective } from './effectiveIdentity';
 import { createTransportAdapter, type TransportConfig } from './transportConfig';
-import { loadBuiltinSourceId } from './customRooms';
+import { loadRoomDownloadSource } from './customRooms';
 
 /**
  * 当前页面内活跃的房间会话清理器（host 或 client），key = roomId。
@@ -89,21 +89,21 @@ export async function createPeerHost(
   // 退出到大厅（已 clearRoomSession）后记录不在 → 全新房间。
   // 复用上次的稳定 host peer id（即邀请码），使刷新后邀请链接不变。
   const restored = store.loadRoom(roomId);
-  const builtinSourceId = await loadBuiltinSourceId(roomId);
+  const downloadSource = await loadRoomDownloadSource(roomId);
   const adapter = await createTransportAdapter(options.transportConfig);
   const transport = await adapter.createHost({
     roomId,
     ...(restored?.hostPeerId ? { hostId: restored.hostPeerId } : {}),
   });
-  // Preserve HostRuntime admission checks, but send a website descriptor instead of built-in files.
-  if (builtinSourceId) {
+  // Preserve admission checks, but send download metadata instead of website/market files.
+  if (downloadSource) {
     const send = transport.send.bind(transport);
     transport.send = (peerId, message) => {
       const data = message.data as RoomMessage;
       if (data.type === 'sys:package-data') {
         send(peerId, {
           ...message,
-          data: { ...data, payload: { manifest: pkg.manifest, packageHash: pkg.packageHash, builtinSourceId } },
+          data: { ...data, payload: { manifest: pkg.manifest, packageHash: pkg.packageHash, ...downloadSource } },
         });
       } else send(peerId, message);
     };
@@ -116,8 +116,8 @@ export async function createPeerHost(
     worker: createWebWorkerHost(),
     roomSource: getWorkerSource(pkg),
     manifest: pkg.manifest,
-    // 透传全部文件，使 host 能响应加入者的 sys:package-request 点对点下发房间代码。
-    packageFiles: builtinSourceId ? {} : encodeFilesBase64(pkg.files),
+    // Downloadable packages only send metadata; custom packages still include their files.
+    packageFiles: downloadSource ? {} : encodeFilesBase64(pkg.files),
     hostName: identity.name,
     ...(identity.avatar ? { hostAvatar: identity.avatar } : {}),
     hostClientId: identity.id,

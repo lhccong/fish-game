@@ -1,5 +1,5 @@
 /**
- * joiner 端取包 —— 经 Host 点对点下载房间代码包 (GOAL §11.1, §8.5)。
+ * Joiners request admission metadata, then download website/market files or receive a custom package.
  */
 import {
   PARTI_VERSION,
@@ -14,9 +14,11 @@ import {
 import { createPackage, decodeFilesBase64, type RoomPackage } from '@parti/room-packager';
 import { createTransportAdapter, type TransportConfig } from './transportConfig';
 import { findRoom, loadPackageSource } from './rooms';
+import { loadMarketPackage, validateDownloadedRoomPackage } from './marketPackage';
+import type { RoomDownloadSource } from './customRooms';
 
 const PACKAGE_FETCH_TIMEOUT_MS = 60_000;
-type WebsitePackageData = Omit<PackageDataPayload, 'files'> & { builtinSourceId: string; packageHash: string };
+type WebsitePackageData = Omit<PackageDataPayload, 'files'> & RoomDownloadSource & { packageHash: string };
 type PackageResponse = PackageDataPayload | WebsitePackageData;
 
 export type FetchPackageErrorCode = 'timeout' | 'disconnected';
@@ -52,17 +54,17 @@ export async function fetchPackageOverPeer(
   try {
     options.onStage?.('downloading');
     const data = await requestPackageData(transport, roomId, options);
-    if ('builtinSourceId' in data) {
-      if (typeof data.builtinSourceId !== 'string' || !findRoom(data.builtinSourceId)) {
+    if ('builtinSourceId' in data || 'marketSource' in data) {
+      if ('builtinSourceId' in data && (typeof data.builtinSourceId !== 'string' || !findRoom(data.builtinSourceId))) {
         throw new Error('Built-in package is not available on this website');
       }
-      const source = await loadPackageSource(data.builtinSourceId);
+      // The transfer connection is no longer needed while fetching public package files.
+      transport.close();
+      const source = 'marketSource' in data
+        ? await loadMarketPackage(data.marketSource)
+        : await loadPackageSource(data.builtinSourceId);
       options.onStage?.('validating');
-      const pkg = await createPackage({ manifest: data.manifest, files: source.files });
-      if (pkg.manifest.id !== roomId || pkg.packageHash !== data.packageHash) {
-        throw new Error('Website package differs from the host package. Ask the host to create a new room.');
-      }
-      return pkg;
+      return await validateDownloadedRoomPackage(source, data.manifest, roomId, data.packageHash);
     }
     options.onStage?.('validating');
     const pkg = await createPackage({ manifest: data.manifest, files: decodeFilesBase64(data.files) });
