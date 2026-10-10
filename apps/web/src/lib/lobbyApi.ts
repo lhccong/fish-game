@@ -142,6 +142,7 @@ export class LobbyPublisher {
   private lease: LobbyLease | null;
   private input: LobbyRoomInput | null = null;
   private timer?: ReturnType<typeof setInterval>;
+  private operations: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly roomId: string,
@@ -151,7 +152,18 @@ export class LobbyPublisher {
     this.lease = loadLease(roomId);
   }
 
-  async publish(input: LobbyRoomInput): Promise<void> {
+  private enqueue(operation: () => Promise<void>): Promise<void> {
+    // Lease creation and updates must not race before the first lease is saved.
+    const result = this.operations.then(operation);
+    this.operations = result.catch(() => {});
+    return result;
+  }
+
+  publish(input: LobbyRoomInput): Promise<void> {
+    return this.enqueue(() => this.publishNow(input));
+  }
+
+  private async publishNow(input: LobbyRoomInput): Promise<void> {
     this.input = input;
     this.startHeartbeat();
     this.onStatus('publishing');
@@ -169,11 +181,15 @@ export class LobbyPublisher {
     this.onStatus('published');
   }
 
-  async sync(input: LobbyRoomInput): Promise<void> {
+  sync(input: LobbyRoomInput): Promise<void> {
+    return this.enqueue(() => this.syncNow(input));
+  }
+
+  private async syncNow(input: LobbyRoomInput): Promise<void> {
     this.input = input;
     if (!this.lease) {
       try {
-        await this.publish(input);
+        await this.publishNow(input);
       } catch {
         this.onStatus('syncFailed');
       }
@@ -187,14 +203,18 @@ export class LobbyPublisher {
       if (error instanceof LobbyHttpError && error.status === 404) {
         this.lease = null;
         clearLease(this.roomId);
-        await this.publish(input);
+        await this.publishNow(input);
         return;
       }
       this.onStatus('syncFailed');
     }
   }
 
-  async unpublish(): Promise<void> {
+  unpublish(): Promise<void> {
+    return this.enqueue(() => this.unpublishNow());
+  }
+
+  private async unpublishNow(): Promise<void> {
     this.stopHeartbeat();
     const lease = this.lease;
     this.lease = null;

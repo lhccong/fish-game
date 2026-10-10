@@ -194,7 +194,13 @@ function SettingsCard({ props }: { props: RoomControlsProps }) {
   useEffect(() => { setTitleDraft(settings.title); }, [settings.title]);
 
   function commitTitleDraft(): void {
-    if (titleDraft !== settings.title) onApplySettings({ ...settings, title: titleDraft });
+    const title = titleDraft.trim();
+    if (!title) {
+      setTitleDraft(settings.title);
+      return;
+    }
+    setTitleDraft(title);
+    if (title !== settings.title) onApplySettings({ ...settings, title });
   }
 
   return (

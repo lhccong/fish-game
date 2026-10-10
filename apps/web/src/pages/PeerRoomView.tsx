@@ -106,7 +106,7 @@ function PeerHostView({ roomId, transportConfig }: { roomId?: string; transportC
     ...storedSettings,
     replayEnabled: ENABLE_REPLAYS && storedSettings.replayEnabled,
   } : {
-    title: pkg.manifest.name,
+    title: `${localUserToEffective(loadLocalUser()).name}的房间`,
     password: '',
     isPublic: true,
     replayEnabled: false,

@@ -159,7 +159,7 @@ export function Lobby() {
                       {room.credentialRequired && <Badge variant="secondary" className="mt-2"><FormattedMessage id="lobby.room.passwordRequired" /></Badge>}
                     </div>
                   </CardHeader>
-                  <CardFooter className="mx-5 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-transparent px-0 pt-4 pb-0">
+                  <CardFooter className="mx-5 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-transparent px-0 pt-5 pb-5">
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                       <UsersIcon className="size-4 text-success" aria-hidden="true" />
                       {room.maxPlayers === null
