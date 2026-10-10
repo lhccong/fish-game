@@ -6,6 +6,7 @@ import type { RoomClientPort } from '@parti/client-sdk';
 import { createHostLocalPort } from '@parti/client-sdk';
 import { type RoomPackage } from '@parti/room-packager';
 import { InviteQrDialog } from '../components/InviteQrDialog';
+import { OnlinePlayersDropdown } from '../components/OnlinePlayersDropdown';
 import { RoomFrame, type SensorPermissionControl } from '../components/RoomFrame';
 import { DevTools } from '../components/DevTools';
 import {
@@ -461,7 +462,7 @@ function PeerHostSession({
           <h1 className="text-[clamp(34px,5vw,54px)] font-extrabold tracking-[-0.05em]">{settings.title.trim() || pkg.manifest.name}</h1>
         </div>
         <div className="flex items-center gap-2.5 max-md:w-full max-md:justify-between">
-          <div className="flex items-center gap-[7px] rounded-full border border-border bg-surface px-3.5 py-2 text-xs text-muted-foreground max-md:self-start">
+          <OnlinePlayersDropdown host={state.host}>
             <span className="size-2 rounded-full bg-success shadow-[0_0_0_5px_rgba(81,219,147,0.11)]" />
             {intl.formatMessage(
               { id: 'peer.host.playersOnline' },
@@ -473,7 +474,7 @@ function PeerHostSession({
             {admission.maxPlayers !== null && (
               <span>{intl.formatMessage({ id: 'peer.host.playersCapacity' }, { max: admission.maxPlayers })}</span>
             )}
-          </div>
+          </OnlinePlayersDropdown>
           <Button type="button" variant="outline" className="hidden min-h-11 max-md:inline-flex" onClick={() => setControlsOpen(true)}>
             <Settings2Icon data-icon="inline-start" /><FormattedMessage id="peer.host.settings" />
           </Button>

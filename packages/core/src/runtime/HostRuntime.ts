@@ -59,6 +59,7 @@ export interface HostRuntimeOptions {
   packageFiles?: Record<string, string>;
   /** host 玩家展示名 */
   hostName?: string;
+  hostAvatar?: string;
   /** host 的稳定客户端身份 id，与远端玩家的 clientId 语义一致。 */
   hostClientId?: string;
   /**
@@ -179,6 +180,7 @@ export class HostRuntime {
       peerId: this.transport.selfId,
       ...(this.opts.hostClientId ? { clientId: this.opts.hostClientId } : {}),
       name: this.opts.hostName ?? 'Host',
+      ...(this.opts.hostAvatar ? { avatar: this.opts.hostAvatar } : {}),
       role: 'host',
       status: 'connected',
       midRoundOffline: false,
@@ -358,6 +360,8 @@ export class HostRuntime {
       this.players.setStatus(returning.id, 'connected');
       const newName = hello.player.name?.trim();
       if (newName) returning.name = newName;
+      if (hello.player.avatar) returning.avatar = hello.player.avatar;
+      else delete returning.avatar;
 
       this.sendWelcome(peerId, returning);
       this.worker.reconnect(returning);

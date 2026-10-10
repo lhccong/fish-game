@@ -102,6 +102,7 @@ export async function createPeerHost(
     // 透传全部文件，使 host 能响应加入者的 sys:package-request 点对点下发房间代码。
     packageFiles: encodeFilesBase64(pkg.files),
     hostName: identity.name,
+    ...(identity.avatar ? { hostAvatar: identity.avatar } : {}),
     hostClientId: identity.id,
     store,
     ...(options.admissionController
@@ -165,6 +166,7 @@ export function createPeerJoin(
     hostPeerId,
     transportConfig,
     playerName: name,
+    ...(identity.avatar ? { playerAvatar: identity.avatar } : {}),
     clientId: identity.id,
     ...(credential !== undefined ? { credential } : {}),
     ...(handlers.onStatus ? { onStatus: handlers.onStatus } : {}),

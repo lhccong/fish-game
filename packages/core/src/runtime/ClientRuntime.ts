@@ -30,6 +30,7 @@ export interface ClientRuntimeOptions {
   packageHash: string;
   transport: ClientTransportSession;
   playerName?: string;
+  playerAvatar?: string;
   /** 稳定客户端身份 id（跨刷新/掉线），重连时凭此复用原玩家身份。 */
   clientId?: string;
   /** 宿主层提供的 opaque 准入凭据，不会进入 Room Worker。 */
@@ -84,6 +85,7 @@ export class ClientRuntime {
       roomPackageHash: this.opts.packageHash,
       player: {
         name: this.opts.playerName ?? 'Player',
+        ...(this.opts.playerAvatar ? { avatar: this.opts.playerAvatar } : {}),
         ...(this.opts.clientId ? { clientId: this.opts.clientId } : {}),
       },
       capabilities: { binary: false, compression: false, patch: false },

@@ -22,6 +22,7 @@ export interface ReconnectingClientOptions {
   hostPeerId: string;
   transportConfig: TransportConfig;
   playerName: string;
+  playerAvatar?: string;
   /** 稳定客户端身份 id（由入口层从 localStorage 用户身份取得）。 */
   clientId: string;
   credential?: string;
@@ -94,6 +95,7 @@ export class ReconnectingClient {
         packageHash: this.opts.packageHash,
         transport,
         playerName: this.opts.playerName,
+        ...(this.opts.playerAvatar ? { playerAvatar: this.opts.playerAvatar } : {}),
         clientId: this.opts.clientId,
         ...(this.opts.credential !== undefined
           ? { credential: this.opts.credential }
