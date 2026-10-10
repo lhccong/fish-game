@@ -1,5 +1,4 @@
 import type { TransportAdapter } from '@parti/core';
-import type { PeerJSAdapterOptions } from '@parti/transport-peerjs';
 import { createUuid } from './ids';
 
 export type TransportConfig =
@@ -22,11 +21,18 @@ export function resolveJoinTransport(connectionInfo: string, config?: TransportC
   // Relay invitations remain identifiable if a directory drops transportConfig.
   return connectionInfo.startsWith(RELAY_CONNECTION_PREFIX)
     ? DEFAULT_ONLINE_TRANSPORT
-    : config ?? DEFAULT_ONLINE_TRANSPORT;
+    : requireOnlineTransport(config ?? DEFAULT_ONLINE_TRANSPORT);
 }
 
-export function resolveHostTransport(downloadable: boolean, selected: TransportConfig): TransportConfig {
-  return downloadable ? DEFAULT_ONLINE_TRANSPORT : selected;
+export function resolveHostTransport(_downloadable: boolean, _selected: TransportConfig): TransportConfig {
+  return DEFAULT_ONLINE_TRANSPORT;
+}
+
+function requireOnlineTransport(config: TransportConfig): TransportConfig {
+  if (config.adapter !== 'relay') {
+    throw new Error('Only WebSocket rooms are supported. Ask the host to create a new room and share its invitation.');
+  }
+  return DEFAULT_ONLINE_TRANSPORT;
 }
 
 export type CustomTransportProfileInput = Pick<TransportProfile, 'name' | 'config'>;
@@ -147,8 +153,8 @@ export function validateProfileName(name: string): string {
   return normalized;
 }
 
-export function getTransportProfiles(storage: Storage = localStorage): TransportProfile[] {
-  return [...builtInProfiles(), ...loadCustomProfiles(storage)];
+export function getTransportProfiles(_storage: Storage = localStorage): TransportProfile[] {
+  return builtInProfiles().filter((profile) => profile.config.adapter === 'relay');
 }
 
 export function getSelectedTransportProfile(storage: Storage = localStorage): TransportProfile {
@@ -212,7 +218,7 @@ export function deleteCustomTransportProfile(id: string, storage: Storage = loca
 export function getLanDiscoveryConfig(
   storage: Storage = localStorage,
 ): Extract<TransportConfig, { adapter: 'lan' }> {
-  const profiles = getTransportProfiles(storage);
+  const profiles = [...builtInProfiles(), ...loadCustomProfiles(storage)];
   const lastId = storage.getItem(LAST_LAN_KEY) ?? BUILTIN_LAN_ID;
   const profile = profiles.find((item) => item.id === lastId && item.config.adapter === 'lan')
     ?? profiles.find((item) => item.id === BUILTIN_LAN_ID)!;
@@ -221,29 +227,14 @@ export function getLanDiscoveryConfig(
 }
 
 export function configuredTransport(): TransportConfig {
-  return getSelectedTransportProfile().config;
+  return DEFAULT_ONLINE_TRANSPORT;
 }
 
 export async function createTransportAdapter(
   config: TransportConfig,
-  onJoinStage?: PeerJSAdapterOptions['onJoinStage'],
+  _onJoinStage?: (stage: 'signaling' | 'dataChannel') => void,
 ): Promise<TransportAdapter> {
-  const valid = validateTransportConfig(config);
-  if (valid.adapter === 'relay') {
-    const { RelayTransportAdapter } = await import('./RelayTransportAdapter');
-    return new RelayTransportAdapter();
-  }
-  if (valid.adapter === 'peerjs') {
-    const { PeerJSTransportAdapter } = await import('@parti/transport-peerjs');
-    return new PeerJSTransportAdapter({
-      ...(valid.serverUrl ? { peerOptions: peerOptionsFromServerUrl(valid.serverUrl) } : {}),
-      ...(onJoinStage ? { onJoinStage } : {}),
-    });
-  }
-  if (valid.adapter === 'lan') {
-    const { LanTransportAdapter } = await import('@parti/transport-lan');
-    return new LanTransportAdapter(valid.serverUrl ? { serverUrl: valid.serverUrl } : {});
-  }
-  const { CommonTransportAdapter, SupabaseRealtimeProvider } = await import('@parti/transport-common');
-  return new CommonTransportAdapter(new SupabaseRealtimeProvider({ url: valid.url, publishableKey: valid.publishableKey }));
+  requireOnlineTransport(config);
+  const { RelayTransportAdapter } = await import('./RelayTransportAdapter');
+  return new RelayTransportAdapter();
 }

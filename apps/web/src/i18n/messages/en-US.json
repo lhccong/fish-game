@@ -23,9 +23,9 @@
       "languageTitle": "Language",
       "transportEyebrow": "Online",
       "transportTitle": "Sync method",
-      "transportDescription": "Choose the connection service for the next online room you create.",
+      "transportDescription": "All online rooms use server sync / WebSocket.",
       "transportLabel": "Use when creating a room",
-      "transportHint": "Only affects newly created rooms; invite links always determine how a room is joined.",
+      "transportHint": "Creating, joining, and reconnecting to rooms all use the website server.",
       "transport": {
         "recommended": "Recommended",
         "customOption": "{label} · {name}",

@@ -61,7 +61,9 @@ import {
 } from '@parti/transport-lan';
 
 export function PeerRoomView() {
-  const route = parsePeerRoute(window.location.hash);
+  let route: ReturnType<typeof parsePeerRoute>;
+  try { route = parsePeerRoute(window.location.hash); }
+  catch (reason) { return <RoomError message={reason instanceof Error ? reason.message : String(reason)} />; }
   if (route.mode === 'agent') {
     return (
       <AgentRoomView

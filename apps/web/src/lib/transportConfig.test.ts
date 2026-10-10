@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_LAN_ID, BUILTIN_PEERJS_ID, BUILTIN_RELAY_ID, deleteCustomTransportProfile,
-  createTransportAdapter, getLanDiscoveryConfig, getSelectedTransportProfile, getTransportProfiles, peerOptionsFromServerUrl,
+  getLanDiscoveryConfig, getSelectedTransportProfile, getTransportProfiles, peerOptionsFromServerUrl,
   saveCustomTransportProfile, selectTransportProfile, validateTransportConfig,
   resolveHostTransport, resolveJoinTransport,
 } from './transportConfig';
@@ -17,32 +17,35 @@ class MemoryStorage implements Storage {
 }
 
 describe('transport profiles', () => {
-  it('uses the same relay policy for builtin and market downloads without changing custom rooms', () => {
+  it('forces relay for all new rooms and rejects non-relay invitations', () => {
     expect(resolveHostTransport(true, { adapter: 'peerjs' })).toEqual({ adapter: 'relay' });
-    expect(resolveHostTransport(false, { adapter: 'peerjs' })).toEqual({ adapter: 'peerjs' });
+    expect(resolveHostTransport(false, { adapter: 'peerjs' })).toEqual({ adapter: 'relay' });
+    expect(resolveHostTransport(false, { adapter: 'lan' })).toEqual({ adapter: 'relay' });
     expect(resolveJoinTransport('relay:host', { adapter: 'peerjs' })).toEqual({ adapter: 'relay' });
     expect(resolveJoinTransport('host')).toEqual({ adapter: 'relay' });
-    expect(resolveJoinTransport('host', { adapter: 'peerjs' })).toEqual({ adapter: 'peerjs' });
+    expect(() => resolveJoinTransport('host', { adapter: 'peerjs' })).toThrow('Only WebSocket');
+    expect(() => resolveJoinTransport('host', { adapter: 'lan' })).toThrow('Only WebSocket');
   });
-  it('offers server relay first, alongside PeerJS and LAN', () => {
+  it('only offers server relay', () => {
     const storage = new MemoryStorage();
-    expect(getTransportProfiles(storage).map((profile) => profile.id)).toEqual([BUILTIN_RELAY_ID, BUILTIN_PEERJS_ID, BUILTIN_LAN_ID]);
+    expect(getTransportProfiles(storage).map((profile) => profile.id)).toEqual([BUILTIN_RELAY_ID]);
+    expect(() => selectTransportProfile(BUILTIN_PEERJS_ID, storage)).toThrow();
+    expect(() => selectTransportProfile(BUILTIN_LAN_ID, storage)).toThrow();
     expect(getSelectedTransportProfile(storage).id).toBe(BUILTIN_RELAY_ID);
   });
 
-  it('creates, edits, selects and deletes custom profiles', () => {
+  it('does not expose or select stored custom profiles', () => {
     const storage = new MemoryStorage();
     const created = saveCustomTransportProfile({
       name: ' My Peer ', config: { adapter: 'peerjs', serverUrl: 'https://peer.example.com/peerjs/' },
     }, undefined, storage);
     expect(created.name).toBe('My Peer');
-    expect(getSelectedTransportProfile(storage).id).toBe(created.id);
+    expect(getSelectedTransportProfile(storage).id).toBe(BUILTIN_RELAY_ID);
     saveCustomTransportProfile({
       name: 'My Supabase', config: { adapter: 'common', provider: 'supabase', url: 'https://project.supabase.co', publishableKey: 'anon-key' },
     }, created.id, storage);
-    expect(selectTransportProfile(created.id, storage).config).toEqual({
-      adapter: 'common', provider: 'supabase', url: 'https://project.supabase.co', publishableKey: 'anon-key',
-    });
+    expect(() => selectTransportProfile(created.id, storage)).toThrow();
+    expect(getTransportProfiles(storage).map((profile) => profile.id)).toEqual([BUILTIN_RELAY_ID]);
     deleteCustomTransportProfile(created.id, storage);
     expect(getSelectedTransportProfile(storage).id).toBe(BUILTIN_RELAY_ID);
   });
@@ -50,6 +53,8 @@ describe('transport profiles', () => {
   it.each([
     ['legacy common preference', 'parti:transport-preference', 'common'],
     ['removed built-in Supabase profile', 'parti:transport-profile:selected:v1', 'builtin:supabase'],
+    ['PeerJS preference', 'parti:transport-profile:selected:v1', BUILTIN_PEERJS_ID],
+    ['LAN preference', 'parti:transport-profile:selected:v1', BUILTIN_LAN_ID],
   ])('falls back to server relay for %s', (_label, key, value) => {
     const storage = new MemoryStorage();
     storage.setItem(key, value);
@@ -57,15 +62,11 @@ describe('transport profiles', () => {
     expect(storage.getItem('parti:transport-profile:selected:v1')).toBe(BUILTIN_RELAY_ID);
   });
 
-  it('parses PeerServer URL and rejects unsafe services', async () => {
+  it('parses stored service URLs and rejects unsafe services', () => {
     expect(peerOptionsFromServerUrl('https://peer.example.com:9443/peerjs/')).toEqual({
       host: 'peer.example.com', port: 9443, path: '/peerjs', secure: true,
     });
     expect(() => validateTransportConfig({ adapter: 'peerjs', serverUrl: 'http://evil.test' })).toThrow();
-    const adapter = await createTransportAdapter({ adapter: 'peerjs', serverUrl: 'https://peer.example.com:9443/peerjs' });
-    expect((adapter as unknown as { opts: { peerOptions: unknown } }).opts.peerOptions).toEqual({
-      host: 'peer.example.com', port: 9443, path: '/peerjs', secure: true,
-    });
     expect(() => validateTransportConfig({
       adapter: 'common', provider: 'supabase', url: 'https://project.supabase.co', publishableKey: 'sb_secret_nope',
     })).toThrow();
@@ -84,7 +85,7 @@ describe('transport profiles', () => {
     const custom = saveCustomTransportProfile({
       name: 'Office LAN', config: { adapter: 'lan', serverUrl: 'wss://office.example.com/v1/ws' },
     }, undefined, storage);
-    selectTransportProfile(BUILTIN_PEERJS_ID, storage);
+    selectTransportProfile(BUILTIN_RELAY_ID, storage);
     expect(getLanDiscoveryConfig(storage)).toEqual(custom.config);
     deleteCustomTransportProfile(custom.id, storage);
     expect(getLanDiscoveryConfig(storage)).toEqual({ adapter: 'lan' });

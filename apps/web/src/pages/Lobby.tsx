@@ -15,6 +15,7 @@ import {
 import { buildJoinHashRoute, navigateToPeerJoin } from '../lib/peerRoutes';
 import { loadLocalUser } from '../lib/localUser';
 import { ENABLE_REPLAYS } from '../lib/featureFlags';
+import { resolveJoinTransport } from '../lib/transportConfig';
 
 function RoomCover({ src }: { src: string | undefined }) {
   const [failed, setFailed] = useState(false);
@@ -61,7 +62,12 @@ export function Lobby() {
         .listRooms({ viewerClientId })
         .then((rooms) => {
           if (!active) return;
-          setOnline(rooms);
+          setOnline(rooms.filter((room) => {
+            try {
+              resolveJoinTransport(room.connectionInfo ?? room.hostPeerId, room.transportConfig);
+              return true;
+            } catch { return false; }
+          }));
           setOnlineStatus('ready');
         })
         .catch(() => {

@@ -23,9 +23,9 @@
       "languageTitle": "语言设置",
       "transportEyebrow": "联机",
       "transportTitle": "同步方式",
-      "transportDescription": "选择下一次创建在线房间使用的连接服务。",
+      "transportDescription": "所有在线房间统一使用服务器同步 / WebSocket。",
       "transportLabel": "创建房间时使用",
-      "transportHint": "只影响之后创建的房间；加入房间时以邀请链接为准。",
+      "transportHint": "创建、加入和重新连接房间均通过网站服务器。",
       "transport": {
         "recommended": "推荐",
         "customOption": "{label} · {name}",

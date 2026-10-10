@@ -69,7 +69,7 @@ describe('peer routes', () => {
     const url = buildInviteUrl('https://parti.test', '/', 'room', 'relay:host', '', { adapter: 'peerjs' });
     expect(parsePeerRoute(new URL(url).hash).transportConfig).toEqual({ adapter: 'relay' });
     expect(parsePeerRoute('#/peer/join/room/relay%3Ahost?adapter=relay').transportConfig).toEqual({ adapter: 'relay' });
-    expect(parsePeerRoute('#/online/join/room/host?adapter=peerjs').transportConfig).toEqual({ adapter: 'peerjs' });
+    expect(() => parsePeerRoute('#/online/join/room/host?adapter=peerjs')).toThrow('Only WebSocket');
   });
   it('round-trips server relay invitations without a host secret or third-party URL', () => {
     const config: TransportConfig = { adapter: 'relay' };
@@ -80,7 +80,7 @@ describe('peer routes', () => {
   it('encodes and parses password invite links', () => {
     const url = buildInviteUrl('https://parti.test', '/app/', 'room id', 'peer/one', '0123');
     expect(url).toBe('https://parti.test/app/#/online/join/room%20id/peer%2Fone?adapter=relay&password=0123');
-    expect(parsePeerRoute('#/peer/join/room%20id/peer%2Fone?password=0123')).toMatchObject({
+    expect(parsePeerRoute('#/online/join/room%20id/peer%2Fone?password=0123')).toMatchObject({
       mode: 'join',
       roomId: 'room id',
       hostPeerId: 'peer/one',
@@ -89,39 +89,33 @@ describe('peer routes', () => {
   });
 
   it('parses invite input from full URL, hash, and path', () => {
-    const expected = '/online/join/room%20id/peer%2Fone?adapter=peerjs&password=0123';
-    expect(parseInviteInput('https://parti.test/app/#/peer/join/room%20id/peer%2Fone?password=0123')).toBe(expected);
-    expect(parseInviteInput('#/peer/join/room%20id/peer%2Fone?password=0123')).toBe(expected);
-    expect(parseInviteInput('/peer/join/counter/peer%2Fabc')).toBe('/online/join/counter/peer%2Fabc?adapter=peerjs');
+    const expected = '/online/join/room%20id/peer%2Fone?adapter=relay&password=0123';
+    expect(parseInviteInput('https://parti.test/app/#/online/join/room%20id/peer%2Fone?password=0123')).toBe(expected);
+    expect(parseInviteInput('#/online/join/room%20id/peer%2Fone?password=0123')).toBe(expected);
+    expect(parseInviteInput('/online/join/counter/peer%2Fabc')).toBe('/online/join/counter/peer%2Fabc?adapter=relay');
   });
 
-  it('round-trips a portable Supabase common transport link', () => {
+  it('rejects Supabase invitations', () => {
     const config: TransportConfig = {
       adapter: 'common', provider: 'supabase', url: 'https://project.supabase.co', publishableKey: 'sb_publishable_public',
     };
-    const url = buildInviteUrl('https://parti.test', '/', 'counter', 'opaque-info', '', config);
-    expect(parsePeerRoute(new URL(url).hash)).toMatchObject({
-      mode: 'join', roomId: 'counter', hostPeerId: 'opaque-info', transportConfig: config,
-    });
-    expect(parseInviteInput(url)).toContain('adapter=common&provider=supabase');
+    expect(() => buildInviteUrl('https://parti.test', '/', 'counter', 'opaque-info', '', config)).toThrow('Only WebSocket');
+    expect(parseInviteInput('#/online/join/counter/info?adapter=common&provider=supabase&url=https%3A%2F%2Fproject.supabase.co&key=sb_publishable_public')).toBeNull();
   });
 
-  it('round-trips a custom PeerServer link', () => {
+  it('rejects custom PeerServer and old PeerJS links', () => {
     const config: TransportConfig = { adapter: 'peerjs', serverUrl: 'https://peer.example.com/peerjs' };
-    const url = buildInviteUrl('https://parti.test', '/', 'counter', 'peer-id', '', config);
-    expect(parsePeerRoute(new URL(url).hash).transportConfig).toEqual(config);
-    expect(url).toContain('server=https%3A%2F%2Fpeer.example.com%2Fpeerjs');
+    expect(() => buildInviteUrl('https://parti.test', '/', 'counter', 'peer-id', '', config)).toThrow('Only WebSocket');
+    expect(parseInviteInput('#/online/join/counter/peer-id?adapter=peerjs&server=https%3A%2F%2Fpeer.example.com%2Fpeerjs')).toBeNull();
+    expect(parseInviteInput('#/peer/join/counter/peer-id')).toBeNull();
   });
 
-  it('round-trips LAN links and omits the default signaling server', () => {
-    const defaultUrl = buildInviteUrl('https://parti.test', '/', 'counter', 'stable-host', '', { adapter: 'lan' });
-    expect(defaultUrl).toBe('https://parti.test/#/online/join/counter/stable-host?adapter=lan');
-    expect(parsePeerRoute(new URL(defaultUrl).hash).transportConfig).toEqual({ adapter: 'lan' });
+  it('rejects LAN invitations', () => {
+    expect(() => buildInviteUrl('https://parti.test', '/', 'counter', 'stable-host', '', { adapter: 'lan' })).toThrow('Only WebSocket');
 
     const config: TransportConfig = { adapter: 'lan', serverUrl: 'wss://lan.example.com/v1/ws' };
-    const customUrl = buildInviteUrl('https://parti.test', '/', 'counter', 'stable-host', '', config);
-    expect(parsePeerRoute(new URL(customUrl).hash).transportConfig).toEqual(config);
-    expect(customUrl).toContain('server=wss%3A%2F%2Flan.example.com%2Fv1%2Fws');
+    expect(() => buildInviteUrl('https://parti.test', '/', 'counter', 'stable-host', '', config)).toThrow('Only WebSocket');
+    expect(parseInviteInput('#/online/join/counter/stable-host?adapter=lan')).toBeNull();
   });
 
   it('rejects unsafe common transport links', () => {
@@ -140,13 +134,13 @@ describe('peer routes', () => {
   });
 
   it('extracts invite URL from surrounding share text', () => {
-    const expected = '/online/join/room%20id/peer%2Fone?adapter=peerjs&password=0123';
-    const url = 'https://parti.test/app/#/peer/join/room%20id/peer%2Fone?password=0123';
+    const expected = '/online/join/room%20id/peer%2Fone?adapter=relay&password=0123';
+    const url = 'https://parti.test/app/#/online/join/room%20id/peer%2Fone?password=0123';
     expect(parseInviteInput(`快来加入：${url}`)).toBe(expected);
     expect(parseInviteInput(`邀请链接：${url}。`)).toBe(expected);
     expect(parseInviteInput(`Join us ${url} now`)).toBe(expected);
-    expect(parseInviteInput(`链接 /peer/join/counter/peer%2Fabc 在这里`)).toBe('/online/join/counter/peer%2Fabc?adapter=peerjs');
-    expect(parseInviteInput(`复制此链接 #/peer/join/counter/peer%2Fabc 加入`)).toBe('/online/join/counter/peer%2Fabc?adapter=peerjs');
+    expect(parseInviteInput(`链接 /online/join/counter/peer%2Fabc 在这里`)).toBe('/online/join/counter/peer%2Fabc?adapter=relay');
+    expect(parseInviteInput(`复制此链接 #/online/join/counter/peer%2Fabc 加入`)).toBe('/online/join/counter/peer%2Fabc?adapter=relay');
   });
 });
 

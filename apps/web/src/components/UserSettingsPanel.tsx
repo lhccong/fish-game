@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useIntl } from 'react-intl';
-import { CircleCheckIcon, GaugeIcon, NetworkIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +28,6 @@ import {
 } from '@/components/ui/sheet';
 import { LOCALE_LABELS, LOCALES, type AppLocale } from '@/i18n/locales';
 import { useLocale } from '@/i18n/LocaleProvider';
-import { TransportProfilesDialog } from './TransportProfilesDialog';
 import { clearAllBrowserStorage } from '../lib/clearLocalData';
 import {
   getCachedFishUser,
@@ -38,22 +36,9 @@ import {
   subscribeFishUser,
   type FishUser,
 } from '../lib/fishUser';
-import {
-  getSelectedTransportProfile,
-  getTransportProfiles,
-  selectTransportProfile,
-  type TransportConfig,
-} from '../lib/transportConfig';
 
 const sectionCardClass =
   'gap-4 rounded-[18px] border-border bg-[linear-gradient(150deg,var(--surface-2),var(--surface))] flex-shrink-0';
-
-function transportMessageSuffix(config: TransportConfig): 'relay' | 'peerjs' | 'lan' | 'supabase' {
-  if (config.adapter === 'relay') return 'relay';
-  if (config.adapter === 'peerjs') return 'peerjs';
-  if (config.adapter === 'lan') return 'lan';
-  return 'supabase';
-}
 
 type UserSettingsPanelProps = {
   open: boolean;
@@ -63,18 +48,10 @@ type UserSettingsPanelProps = {
 export function UserSettingsPanel({ open, onOpenChange }: UserSettingsPanelProps) {
   const intl = useIntl();
   const { locale, setLocale } = useLocale();
-  const [profilesVersion, setProfilesVersion] = useState(0);
-  const [profilesOpen, setProfilesOpen] = useState(false);
   const [clearDataOpen, setClearDataOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [fishUser, setFishUser] = useState<FishUser | null>(() => getCachedFishUser());
   const [fishBusy, setFishBusy] = useState(false);
-  const profiles = getTransportProfiles().filter((profile) => profile.config.adapter !== 'lan');
-  const storedSelectedProfile = getSelectedTransportProfile();
-  const selectedProfile = storedSelectedProfile.config.adapter === 'lan'
-    ? profiles.find((profile) => profile.config.adapter === 'peerjs') ?? storedSelectedProfile
-    : storedSelectedProfile;
-  const transportSuffix = transportMessageSuffix(selectedProfile.config);
 
   useEffect(() => {
     if (open) {
@@ -187,78 +164,6 @@ export function UserSettingsPanel({ open, onOpenChange }: UserSettingsPanelProps
           <Card className={sectionCardClass}>
             <CardHeader>
               <span className="text-[9px] font-extrabold tracking-[0.14em] text-primary-bright uppercase">
-                {intl.formatMessage({ id: 'user.settings.transportEyebrow' })}
-              </span>
-              <CardTitle className="mt-1 text-lg">{intl.formatMessage({ id: 'user.settings.transportTitle' })}</CardTitle>
-              <CardDescription>{intl.formatMessage({ id: 'user.settings.transportDescription' })}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <Label htmlFor="parti-user-transport">{intl.formatMessage({ id: 'user.settings.transportLabel' })}</Label>
-              <Select value={selectedProfile.id} onValueChange={(value) => {
-                selectTransportProfile(value);
-                setProfilesVersion((current) => current + 1);
-              }}>
-                <SelectTrigger id="parti-user-transport" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {profiles.map((profile) => {
-                    const suffix = transportMessageSuffix(profile.config);
-                    const friendlyLabel = intl.formatMessage({ id: `user.settings.transport.${suffix}.optionLabel` });
-                    return (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.custom
-                          ? intl.formatMessage(
-                            { id: 'user.settings.transport.customOption' },
-                            { label: friendlyLabel, name: profile.name },
-                          )
-                          : friendlyLabel}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-              <div className="min-w-0 rounded-xl border border-border bg-background/55 p-3.5" aria-live="polite">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="font-semibold text-foreground">
-                    {intl.formatMessage({ id: `user.settings.transport.${transportSuffix}.title` })}
-                  </span>
-                  {transportSuffix === 'relay' && (
-                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-primary-bright uppercase">
-                      {intl.formatMessage({ id: 'user.settings.transport.recommended' })}
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    {intl.formatMessage({ id: `user.settings.transport.${transportSuffix}.technology` })}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  {intl.formatMessage({ id: `user.settings.transport.${transportSuffix}.summary` })}
-                </p>
-                <ul className="mt-3 grid gap-2 text-xs leading-relaxed text-muted-foreground">
-                  <li className="flex gap-2">
-                    <NetworkIcon className="mt-0.5 size-3.5 shrink-0 text-primary-bright" aria-hidden="true" />
-                    <span>{intl.formatMessage({ id: `user.settings.transport.${transportSuffix}.network` })}</span>
-                  </li>
-                  <li className="flex gap-2">
-                    <GaugeIcon className="mt-0.5 size-3.5 shrink-0 text-primary-bright" aria-hidden="true" />
-                    <span>{intl.formatMessage({ id: `user.settings.transport.${transportSuffix}.latency` })}</span>
-                  </li>
-                  <li className="flex gap-2">
-                    <CircleCheckIcon className="mt-0.5 size-3.5 shrink-0 text-primary-bright" aria-hidden="true" />
-                    <span>{intl.formatMessage({ id: `user.settings.transport.${transportSuffix}.reliability` })}</span>
-                  </li>
-                </ul>
-              </div>
-              <p className="text-xs text-muted-foreground">{intl.formatMessage({ id: 'user.settings.transportHint' })}</p>
-              <Button type="button" variant="outline" onClick={() => setProfilesOpen(true)}>
-                {intl.formatMessage({ id: 'user.settings.profilesButton' })}
-              </Button>
-              <p className="text-xs text-muted-foreground">{intl.formatMessage({ id: 'user.settings.profilesHint' })}</p>
-            </CardContent>
-          </Card>
-
-          <Card className={sectionCardClass}>
-            <CardHeader>
-              <span className="text-[9px] font-extrabold tracking-[0.14em] text-primary-bright uppercase">
                 {intl.formatMessage({ id: 'user.settings.languageEyebrow' })}
               </span>
               <CardTitle className="mt-1 text-lg">{intl.formatMessage({ id: 'user.settings.languageTitle' })}</CardTitle>
@@ -288,12 +193,6 @@ export function UserSettingsPanel({ open, onOpenChange }: UserSettingsPanelProps
           </div>
         </div>
       </SheetContent>
-      <TransportProfilesDialog
-        key={profilesVersion}
-        open={profilesOpen}
-        onOpenChange={setProfilesOpen}
-        onProfilesChange={() => setProfilesVersion((current) => current + 1)}
-      />
       <Dialog open={clearDataOpen} onOpenChange={setClearDataOpen}>
         <DialogContent>
           <DialogHeader>
