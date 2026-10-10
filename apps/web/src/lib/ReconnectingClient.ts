@@ -85,10 +85,15 @@ export class ReconnectingClient {
     this.opts.onStatus?.(this.attempt === 0 ? 'connecting' : 'reconnecting');
     try {
       const adapter = await createTransportAdapter(this.opts.transportConfig);
+      if (this.disposed) return;
       const transport = await adapter.joinRoom({
         roomId: this.opts.roomId,
         hostConnectionInfo: this.opts.hostPeerId,
       });
+      if (this.disposed) {
+        transport.close();
+        return;
+      }
       const runtime = new ClientRuntime({
         roomId: this.opts.roomId,
         partiVersion: PARTI_VERSION,
@@ -104,7 +109,14 @@ export class ReconnectingClient {
       this.transport = transport;
       this.bind(runtime);
       await runtime.start();
-    } catch {
+    } catch (error) {
+      if (this.disposed) return;
+      // Initial connection failures must reach the error page, not retry invisibly.
+      if (!this.hasState && error instanceof Error && error.message.startsWith('[PEER_')) {
+        this.cleanupRuntime();
+        this.opts.onFatal?.(error.message);
+        return;
+      }
       this.scheduleRetry();
     }
   }

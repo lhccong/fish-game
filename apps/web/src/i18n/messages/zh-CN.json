@@ -348,6 +348,18 @@
       "credentialRequired": "该房间需要密码",
       "invalidCredential": "房间密码错误"
     },
+    "joinStage": {
+      "connecting": "正在连接房主…",
+      "signaling": "正在连接信令服务（最多 20 秒）…",
+      "dataChannel": "正在与房主建立数据通道（最多 30 秒）…",
+      "downloading": "数据通道已建立，正在下载房间包（最多 60 秒）…",
+      "validating": "房间包已收到，正在校验…"
+    },
+    "connectionError": {
+      "signaling": "连接信令服务失败或超时，请检查网络及信令服务是否可用。",
+      "dataChannel": "与房主建立数据通道失败或超时，请确认房主在线；跨网络连接还需检查防火墙和 TURN 中继是否可用。",
+      "hostUnavailable": "信令服务找不到房主，请确认房主仍在房间内，并重新获取邀请链接。"
+    },
     "fetchPackage": {
       "timeout": "取房间代码包超时（房主可能不在线、版本过旧，或房间包超过实时服务的传输限制）",
       "disconnected": "与房主的连接已断开，未能取得房间代码包"

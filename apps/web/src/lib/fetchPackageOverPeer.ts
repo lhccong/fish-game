@@ -17,6 +17,7 @@ import { createTransportAdapter, type TransportConfig } from './transportConfig'
 const PACKAGE_FETCH_TIMEOUT_MS = 60_000;
 
 export type FetchPackageErrorCode = 'timeout' | 'disconnected';
+export type PackageJoinStage = 'connecting' | 'signaling' | 'dataChannel' | 'downloading' | 'validating';
 
 export class FetchPackageError extends Error {
   readonly code: FetchPackageErrorCode;
@@ -31,16 +32,24 @@ export class FetchPackageError extends Error {
 export async function fetchPackageOverPeer(
   roomId: string,
   hostPeerId: string,
-  options: { clientId?: string; credential?: string; transportConfig?: TransportConfig } = {},
+  options: {
+    clientId?: string;
+    credential?: string;
+    transportConfig?: TransportConfig;
+    onStage?: (stage: PackageJoinStage) => void;
+  } = {},
 ): Promise<RoomPackage> {
-  const adapter = await createTransportAdapter(options.transportConfig ?? { adapter: 'peerjs' });
+  options.onStage?.('connecting');
+  const adapter = await createTransportAdapter(options.transportConfig ?? { adapter: 'peerjs' }, options.onStage);
   const transport = await adapter.joinRoom({
     roomId,
     hostConnectionInfo: hostPeerId,
   });
 
   try {
+    options.onStage?.('downloading');
     const data = await requestPackageData(transport, roomId, options);
+    options.onStage?.('validating');
     return await createPackage({ manifest: data.manifest, files: decodeFilesBase64(data.files) });
   } finally {
     transport.close();

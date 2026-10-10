@@ -16,7 +16,7 @@ import {
   registerRoomDisposer,
 } from '../lib/PeerRoomSession';
 import { loadRoomCover, loadRoomSnapshot } from '../lib/customRooms';
-import { FetchPackageError, fetchPackageOverPeer } from '../lib/fetchPackageOverPeer';
+import { FetchPackageError, fetchPackageOverPeer, type PackageJoinStage } from '../lib/fetchPackageOverPeer';
 import {
   createPasswordAdmissionController,
   loadHostRoomSettings,
@@ -540,6 +540,7 @@ function PeerJoinView({
   const [state, setState] = useState<{ pkg: RoomPackage; port: RoomClientPort; roomTitle: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('connecting');
+  const [joinStage, setJoinStage] = useState<PackageJoinStage>('connecting');
   const [controlsOpen, setControlsOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
@@ -572,6 +573,7 @@ function PeerJoinView({
     fetchPackageOverPeer(roomId, hostPeerId, {
       clientId: user.id,
       transportConfig,
+      onStage: setJoinStage,
       ...(credential ? { credential } : {}),
     })
       .then((pkg) => {
@@ -653,7 +655,7 @@ function PeerJoinView({
       <div className={playerGate}>
         <Logo size="md" className="mb-2.5" />
         <div className="p-[22px] text-center text-[13px] text-muted-foreground">
-          <FormattedMessage id="peer.loading.joining" />
+          <FormattedMessage id={`peer.joinStage.${joinStage}`} />
           <br />
           <span className="text-[11px]"><FormattedMessage id="peer.loading.browserHint" /></span>
         </div>
@@ -845,7 +847,7 @@ function RoomError({ message, showTips }: { message: string; showTips?: boolean 
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,211,55,0.25),transparent_34rem)] p-6">
       <Card className={`gap-3 p-[26px] text-center ${showTips ? 'w-[min(480px,100%)]' : 'w-[min(440px,100%)]'}`}>
         <h2 className="text-xl font-semibold"><FormattedMessage id="peer.error.title" /></h2>
-        <p className="leading-[1.6] text-muted-foreground">{friendlyMessage}</p>
+        <p className="min-w-0 break-words [overflow-wrap:anywhere] leading-[1.6] text-muted-foreground">{friendlyMessage}</p>
         {showTips && (
           <ol className="list-decimal space-y-1.5 pl-5 text-left text-sm leading-[1.5] text-muted-foreground">
             <li><FormattedMessage id="peer.error.tipNetwork" /></li>

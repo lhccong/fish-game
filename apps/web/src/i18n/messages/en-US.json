@@ -346,6 +346,18 @@
       "credentialRequired": "This room requires a password",
       "invalidCredential": "Incorrect room password"
     },
+    "joinStage": {
+      "connecting": "Connecting to the host...",
+      "signaling": "Connecting to the signaling service (up to 20 seconds)...",
+      "dataChannel": "Establishing a data channel with the host (up to 30 seconds)...",
+      "downloading": "Data channel connected. Downloading the room package (up to 60 seconds)...",
+      "validating": "Room package received. Validating..."
+    },
+    "connectionError": {
+      "signaling": "Signaling connection failed or timed out. Check your network and signaling service.",
+      "dataChannel": "Data channel connection failed or timed out. Confirm the host is online; for cross-network connections, also check firewall restrictions and TURN relay availability.",
+      "hostUnavailable": "The signaling service could not find the host. Confirm the host is still in the room and obtain a fresh invite link."
+    },
     "fetchPackage": {
       "timeout": "Timed out fetching room package (the host may be offline, outdated, or the package may exceed the realtime service's transfer limit)",
       "disconnected": "Disconnected from host before receiving the room package"

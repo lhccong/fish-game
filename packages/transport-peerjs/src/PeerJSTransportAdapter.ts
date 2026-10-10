@@ -19,12 +19,87 @@ import type {
 export interface PeerJSAdapterOptions {
   /** 透传给 PeerJS Peer 的配置（如自建 PeerServer host/port）。 */
   peerOptions?: Record<string, unknown>;
+  onJoinStage?: (stage: 'signaling' | 'dataChannel') => void;
+}
+
+const SIGNAL_TIMEOUT_MS = 20_000;
+const DATA_CHANNEL_TIMEOUT_MS = 30_000;
+
+function connectionError(
+  stage: 'SIGNAL' | 'DATA',
+  reason: string,
+  conn?: DataConnection,
+): Error {
+  const pc = conn?.peerConnection;
+  const states = pc
+    ? ` ICE=${pc.iceConnectionState}; gathering=${pc.iceGatheringState}; connection=${pc.connectionState}; signaling=${pc.signalingState}.`
+    : '';
+  return new Error(`[PEER_${stage}_${reason}]${states}`);
 }
 
 function waitForOpen(peer: Peer): Promise<string> {
   return new Promise((resolve, reject) => {
-    peer.on('open', (id) => resolve(id));
-    peer.on('error', (err) => reject(err));
+    const cleanup = () => {
+      clearTimeout(timer);
+      peer.off('open', onOpen);
+      peer.off('error', onError);
+      peer.off('close', onClose);
+      peer.off('disconnected', onDisconnected);
+    };
+    const onOpen = (id: string) => { cleanup(); resolve(id); };
+    const onError = (err: Error & { type?: string }) => {
+      cleanup();
+      reject(Object.assign(connectionError('SIGNAL', 'ERROR'), { type: err.type, cause: err }));
+    };
+    const onClose = () => { cleanup(); reject(connectionError('SIGNAL', 'CLOSED')); };
+    const onDisconnected = () => { cleanup(); reject(connectionError('SIGNAL', 'DISCONNECTED')); };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(connectionError('SIGNAL', 'TIMEOUT'));
+    }, SIGNAL_TIMEOUT_MS);
+    peer.on('open', onOpen);
+    peer.on('error', onError);
+    peer.on('close', onClose);
+    peer.on('disconnected', onDisconnected);
+  });
+}
+
+function waitForDataChannel(peer: Peer, conn: DataConnection): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      conn.off('open', onOpen);
+      conn.off('error', onError);
+      conn.off('close', onClose);
+      conn.off('iceStateChanged', onIceState);
+      peer.off('error', onError);
+      peer.off('close', onClose);
+      peer.off('disconnected', onDisconnected);
+    };
+    const fail = (reason: string, cause?: Error) => {
+      const error = connectionError('DATA', reason, conn);
+      cleanup();
+      reject(Object.assign(error, { cause }));
+    };
+    const onOpen = () => { cleanup(); resolve(); };
+    const onError = (err: Error & { type?: string }) => {
+      fail(err.type === 'peer-unavailable' ? 'HOST_UNAVAILABLE' : 'ERROR', err);
+    };
+    const onClose = () => fail('CLOSED');
+    const onDisconnected = () => fail('SIGNAL_DISCONNECTED');
+    const onIceState = (state: RTCIceConnectionState) => {
+      if (state === 'failed') fail('ICE_FAILED');
+      else if (state === 'closed') fail('CLOSED');
+    };
+    const timer = setTimeout(() => fail('TIMEOUT'), DATA_CHANNEL_TIMEOUT_MS);
+    conn.on('open', onOpen);
+    conn.on('error', onError);
+    conn.on('close', onClose);
+    conn.on('iceStateChanged', onIceState);
+    peer.on('error', onError);
+    peer.on('close', onClose);
+    peer.on('disconnected', onDisconnected);
+    if (conn.open) onOpen();
   });
 }
 
@@ -136,14 +211,18 @@ export class PeerJSTransportAdapter implements TransportAdapter {
     const peer = options.selfId
       ? new Peer(options.selfId, this.opts.peerOptions)
       : new Peer(this.opts.peerOptions ?? {});
-    const selfId = await waitForOpen(peer);
-
-    const conn = peer.connect(options.hostConnectionInfo, { reliable: true });
-    await new Promise<void>((resolve, reject) => {
-      conn.on('open', () => resolve());
-      conn.on('error', (err) => reject(err));
-      peer.on('error', (err) => reject(err));
-    });
+    let selfId: string;
+    let conn: DataConnection;
+    try {
+      this.opts.onJoinStage?.('signaling');
+      selfId = await waitForOpen(peer);
+      this.opts.onJoinStage?.('dataChannel');
+      conn = peer.connect(options.hostConnectionInfo, { reliable: true });
+      await waitForDataChannel(peer, conn);
+    } catch (error) {
+      peer.destroy();
+      throw error;
+    }
 
     let messageHandler: ((message: TransportMessage) => void) | undefined;
     let disconnectHandler: ((reason?: string) => void) | undefined;

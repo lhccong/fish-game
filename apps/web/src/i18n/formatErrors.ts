@@ -29,6 +29,16 @@ export function formatTemplateFallback(intl: IntlShape, key: 'customRoom' | 'imp
 }
 
 export function formatRoomError(intl: IntlShape, message: string): string {
+  const connectionCode = /^\[PEER_(SIGNAL|DATA)_([A-Z_]+)\]/.exec(message);
+  if (connectionCode) {
+    const stage = connectionCode[1] === 'SIGNAL' ? 'signaling' : 'dataChannel';
+    const reason = connectionCode[2] === 'HOST_UNAVAILABLE' ? 'hostUnavailable' : stage;
+    return `${intl.formatMessage({ id: `peer.connectionError.${reason}` })} ${message}`;
+  }
+  if (['timeout', 'disconnected'].some((code) =>
+    message === intl.formatMessage({ id: `peer.fetchPackage.${code}` }))) {
+    return message;
+  }
   if (/peer|connect|network|socket/i.test(message)) {
     return intl.formatMessage({ id: 'peer.error.connectionFailed' });
   }

@@ -1,4 +1,5 @@
 import type { TransportAdapter } from '@parti/core';
+import type { PeerJSAdapterOptions } from '@parti/transport-peerjs';
 import { createUuid } from './ids';
 
 export type TransportConfig =
@@ -204,11 +205,17 @@ export function configuredTransport(): TransportConfig {
   return getSelectedTransportProfile().config;
 }
 
-export async function createTransportAdapter(config: TransportConfig): Promise<TransportAdapter> {
+export async function createTransportAdapter(
+  config: TransportConfig,
+  onJoinStage?: PeerJSAdapterOptions['onJoinStage'],
+): Promise<TransportAdapter> {
   const valid = validateTransportConfig(config);
   if (valid.adapter === 'peerjs') {
     const { PeerJSTransportAdapter } = await import('@parti/transport-peerjs');
-    return new PeerJSTransportAdapter(valid.serverUrl ? { peerOptions: peerOptionsFromServerUrl(valid.serverUrl) } : {});
+    return new PeerJSTransportAdapter({
+      ...(valid.serverUrl ? { peerOptions: peerOptionsFromServerUrl(valid.serverUrl) } : {}),
+      ...(onJoinStage ? { onJoinStage } : {}),
+    });
   }
   if (valid.adapter === 'lan') {
     const { LanTransportAdapter } = await import('@parti/transport-lan');
