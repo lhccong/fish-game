@@ -1,5 +1,5 @@
 {
-  "name": "parti-monopoly",
+  "name": "moyu-monopoly",
   "private": true,
   "version": "0.2.0",
   "type": "module",
@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "package": "npm run build && cd dist && zip -qrFS ../parti-monopoly.room.zip .",
+    "package": "npm run build && cd dist && zip -qrFS ../moyu-monopoly.room.zip .",
     "validate:local": "node scripts/validate-local.mjs",
     "dev:room": "vite build --watch --mode room-dev",
     "build:room": "vite build --mode room-build"

@@ -17,7 +17,7 @@ function partiWorkerBundle(outDir: string): Plugin {
         bundle: true,
         format: 'esm',
         target: 'es2022',
-        sourcemap: true,
+        sourcemap: false,
         external: ['@parti/worker-sdk'],
       });
       const source = readFileSync(outfile, 'utf8');

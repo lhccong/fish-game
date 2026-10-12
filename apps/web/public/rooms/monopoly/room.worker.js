@@ -760,4 +760,3 @@ var index_default = defineRoom({
   }
 });
 export default index_default;
-//# sourceMappingURL=room.worker.js.map
