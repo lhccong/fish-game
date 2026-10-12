@@ -18,7 +18,12 @@ export function LoginButton(): ReactElement | null {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void refreshFishUser();
+    // 有缓存 → 静默用本地用户态展示，不再主动请求 /me 校验，
+    // 避免 vite dev 重启/服务短暂不可用时被无谓 401 踢回登录。
+    // 缓存不命中（首次访问或本地存储被清）才请求 /me 拉真值。
+    if (!getCachedFishUser()) {
+      void refreshFishUser();
+    }
     return subscribeFishUser(setUser);
   }, []);
 

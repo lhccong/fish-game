@@ -57,9 +57,15 @@ function AppLayout() {
 
   useEffect(() => {
     let cancelled = false;
-    void refreshFishUser().finally(() => {
+    // 有缓存就静默用本地用户态，避免 vite dev 重启/服务端短暂不可用时
+    // 被无谓 401 踢回登录；只有首次访问/缓存被清才请求 /me 拉真值。
+    if (getCachedFishUser()) {
       if (!cancelled) setAuthReady(true);
-    });
+    } else {
+      void refreshFishUser().finally(() => {
+        if (!cancelled) setAuthReady(true);
+      });
+    }
     return subscribeFishUser(setFishUser);
   }, []);
 
