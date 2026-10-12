@@ -41,6 +41,6 @@ export async function loadRoomApp(rootDir, appName, requiredScript) {
     appDir,
     kind,
     manifest,
-    outputName: kind === 'room' ? appName : manifest.id,
+    outputName: process.env.PARTI_ROOM_OUT_NAME || (kind === 'room' ? appName : manifest.id),
   };
 }
