@@ -18,7 +18,6 @@ describe('LAN peer metadata', () => {
         playerCount: 2,
         maxPlayers: 8,
         joinable: true,
-        gameJoinable: true,
         credentialRequired: false,
       },
     };
@@ -48,7 +47,7 @@ describe('LAN peer metadata', () => {
       partiVersion: '0.1.0',
       presence: {
         role: 'host', instanceId: 'x', hostId: 'h', roomId: 'r',
-        announcement: { title: '', packageName: 'P', playerCount: -1, maxPlayers: null, joinable: true, gameJoinable: true, credentialRequired: false },
+        announcement: { title: '', packageName: 'P', playerCount: -1, maxPlayers: null, joinable: true, credentialRequired: false },
       },
     })).toString('base64url')}`;
     expect(decodeLanPeerToken(invalid)).toBeNull();

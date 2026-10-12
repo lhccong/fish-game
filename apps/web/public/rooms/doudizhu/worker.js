@@ -194,9 +194,6 @@ function broadcastAction(ctx, kind, payload = {}) {
   const occurredAt = Date.now();
   ctx.broadcast("game:action", { actionId: `doudizhu:${occurredAt}:${++actionSequence}`, occurredAt, kind, ...payload });
 }
-function setGameJoinable(ctx, joinable) {
-  ctx.broadcast("game:joinable-changed", joinable);
-}
 var index_default = defineRoom({
   meta: { name: "\u6597\u5730\u4E3B", minPlayers: 3, maxPlayers: 3 },
   initialState() {
@@ -212,7 +209,6 @@ var index_default = defineRoom({
     if (existing) {
       existing.connected = true;
       existing.name = player.name;
-      ctx.state.rejoinDeadline = null;
       sendHand(ctx, player.id);
       return;
     }
@@ -239,27 +235,24 @@ var index_default = defineRoom({
     if (statePlayer) {
       statePlayer.connected = true;
       statePlayer.name = player.name;
-      ctx.state.rejoinDeadline = null;
       sendHand(ctx, player.id);
     }
   },
   onLeave(ctx, player) {
     const statePlayer = ctx.state.players[player.id];
     if (!statePlayer) return;
-    const wasMidRound = ctx.state.phase === "bidding" || ctx.state.phase === "playing";
-    ctx.state.rejoinDeadline = null;
+    if (ctx.state.phase === "bidding" || ctx.state.phase === "playing") {
+      statePlayer.connected = false;
+      ctx.state.message = `${statePlayer.name} \u79BB\u7EBF\uFF0C\u7B49\u5F85\u91CD\u8FDE`;
+      return;
+    }
     ctx.state.seats[statePlayer.seat] = null;
     delete ctx.state.players[player.id];
     delete ctx.state.handCounts[player.id];
     delete hands[player.id];
     if (playersCount(ctx.state) < 3) {
-      if (wasMidRound) {
-        voidRound(ctx, statePlayer.name);
-      } else {
-        ctx.state.phase = "waiting";
-        ctx.state.message = "\u7B49\u5F85\u4E09\u540D\u73A9\u5BB6\u52A0\u5165";
-        setGameJoinable(ctx, true);
-      }
+      ctx.state.phase = "waiting";
+      ctx.state.message = "\u7B49\u5F85\u4E09\u540D\u73A9\u5BB6\u52A0\u5165";
     }
   },
   actions: {
@@ -273,10 +266,30 @@ var index_default = defineRoom({
       }
     },
     bid(ctx, { player, payload }) {
+      if (ctx.state.phase !== "bidding" || ctx.state.bidState?.currentPlayerId !== player.id) return;
       const score = Number(payload && payload.score);
       if (!Number.isInteger(score) || score < 0 || score > 3) return;
       if (score > 0 && score <= ctx.state.bidState.highestScore) return;
-      applyBid(ctx, player.id, score);
+      const bid = ctx.state.bidState;
+      bid.turns += 1;
+      if (score === 0) {
+        if (!bid.passed.includes(player.id)) bid.passed.push(player.id);
+      } else {
+        bid.highestScore = score;
+        bid.highestPlayerId = player.id;
+      }
+      ctx.broadcast("game:notice", { message: `${ctx.state.players[player.id].name}${score === 0 ? "\u4E0D\u53EB" : `\u53EB ${score} \u5206`}` });
+      broadcastAction(ctx, "bidPlaced", { actorId: player.id, value: score, label: score === 0 ? "\u4E0D\u53EB" : `\u53EB ${score} \u5206` });
+      if (score === 3 || bid.turns >= 3) {
+        if (!bid.highestPlayerId) {
+          ctx.broadcast("game:notice", { message: "\u65E0\u4EBA\u53EB\u5730\u4E3B\uFF0C\u91CD\u65B0\u53D1\u724C" });
+          startRound(ctx);
+          return;
+        }
+        beginPlaying(ctx, bid.highestPlayerId, bid.highestScore);
+        return;
+      }
+      bid.currentPlayerId = nextPlayerId(ctx.state, player.id);
     },
     playCards(ctx, { player, payload }) {
       if (ctx.state.phase !== "playing" || ctx.state.currentPlayerId !== player.id) return;
@@ -322,7 +335,17 @@ var index_default = defineRoom({
     pass(ctx, { player }) {
       if (ctx.state.phase !== "playing" || ctx.state.currentPlayerId !== player.id) return;
       if (!ctx.state.lastPlay || ctx.state.lastPlay.playerId === player.id) return;
-      applyPass(ctx, player.id);
+      ctx.state.playedCards.push({ playerId: player.id, pass: true });
+      broadcastAction(ctx, "playerPassed", { actorId: player.id, label: "\u4E0D\u51FA" });
+      ctx.state.round.passCount += 1;
+      if (ctx.state.round.passCount >= 2) {
+        ctx.state.currentPlayerId = ctx.state.lastPlay.playerId;
+        ctx.state.lastPlay = null;
+        ctx.state.round.passCount = 0;
+        broadcastAction(ctx, "trickCleared", { actorId: ctx.state.currentPlayerId });
+        return;
+      }
+      ctx.state.currentPlayerId = nextPlayerId(ctx.state, player.id);
     },
     syncHand(ctx, { player }) {
       sendHand(ctx, player.id);
@@ -350,7 +373,6 @@ function createInitialState() {
       playCounts: {}
     },
     result: null,
-    rejoinDeadline: null,
     message: "\u7B49\u5F85\u4E09\u540D\u73A9\u5BB6\u52A0\u5165"
   };
 }
@@ -370,7 +392,6 @@ function startRound(ctx) {
   state.playedCards = [];
   state.handCounts = Object.fromEntries(players.map((player) => [player.id, 17]));
   state.result = null;
-  state.rejoinDeadline = null;
   state.round = {
     number: state.round.number + 1,
     starterSeat: state.round.number % 3,
@@ -395,7 +416,6 @@ function startRound(ctx) {
   state.message = "\u5F00\u59CB\u53EB\u5730\u4E3B";
   ctx.broadcast("game:notice", { message: "\u65B0\u4E00\u5C40\u5F00\u59CB\uFF0C\u53EB\u5730\u4E3B" });
   broadcastAction(ctx, "dealStarted", { actorId: starterId });
-  setGameJoinable(ctx, false);
 }
 function beginPlaying(ctx, landlordId, baseScore) {
   const state = ctx.state;
@@ -404,7 +424,6 @@ function beginPlaying(ctx, landlordId, baseScore) {
   state.landlordCardsVisible = sortCards(landlordCardsHidden);
   state.currentPlayerId = landlordId;
   state.bidState = null;
-  state.rejoinDeadline = null;
   state.round.baseScore = baseScore;
   state.round.multiplier = Math.max(1, baseScore);
   state.message = `${state.players[landlordId].name} \u6210\u4E3A\u5730\u4E3B`;
@@ -438,7 +457,6 @@ function settleRound(ctx, winnerId) {
   }
   state.phase = "settlement";
   state.currentPlayerId = null;
-  state.rejoinDeadline = null;
   state.result = {
     winnerTeam: landlordWon ? "landlord" : "farmers",
     winnerIds: landlordWon ? [landlordId] : farmerIds,
@@ -450,35 +468,6 @@ function settleRound(ctx, winnerId) {
   if (spring) broadcastAction(ctx, "multiplierChanged", { actorId: winnerId, value: state.round.multiplier, label: landlordWon ? "\u6625\u5929" : "\u53CD\u6625" });
   broadcastAction(ctx, "roundSettled", { actorId: winnerId, value: state.round.multiplier, label: landlordWon ? "\u5730\u4E3B\u80DC\u5229" : "\u519C\u6C11\u80DC\u5229" });
   ctx.broadcast("game:notice", { message: landlordWon ? "\u5730\u4E3B\u80DC\u5229" : "\u519C\u6C11\u80DC\u5229" });
-  setGameJoinable(ctx, true);
-}
-function voidRound(ctx, leaverName) {
-  const state = ctx.state;
-  for (const player of allPlayers(state)) {
-    player.ready = false;
-    player.role = null;
-  }
-  state.dealer = null;
-  state.landlordCardsVisible = [];
-  state.currentPlayerId = null;
-  state.bidState = null;
-  state.lastPlay = null;
-  state.playedCards = [];
-  state.handCounts = {};
-  state.result = {
-    winnerTeam: "landlord",
-    winnerIds: [],
-    deltas: {},
-    spring: false,
-    multiplier: 1
-  };
-  state.rejoinDeadline = null;
-  state.phase = "settlement";
-  state.message = `${leaverName} \u79BB\u5F00\uFF0C\u672C\u5C40\u6D41\u5C40`;
-  hands = {};
-  landlordCardsHidden = [];
-  ctx.broadcast("game:notice", { message: state.message });
-  setGameJoinable(ctx, true);
 }
 function resetRoundPublicState(state, message) {
   state.phase = playersCount(state) === 3 ? "ready" : "waiting";
@@ -490,7 +479,6 @@ function resetRoundPublicState(state, message) {
   state.playedCards = [];
   state.handCounts = {};
   state.result = null;
-  state.rejoinDeadline = null;
   state.message = message;
   for (const player of allPlayers(state)) {
     player.ready = false;
@@ -510,49 +498,6 @@ function nextPlayerId(state, playerId) {
   const player = state.players[playerId];
   const nextSeat = (player.seat + 1) % 3;
   return state.seats[nextSeat] ?? playerId;
-}
-function applyBid(ctx, playerId, score) {
-  const state = ctx.state;
-  if (state.phase !== "bidding" || state.bidState?.currentPlayerId !== playerId) return;
-  if (!state.players[playerId]) return;
-  const bid = state.bidState;
-  bid.turns += 1;
-  if (score === 0) {
-    if (!bid.passed.includes(playerId)) bid.passed.push(playerId);
-  } else {
-    bid.highestScore = score;
-    bid.highestPlayerId = playerId;
-  }
-  ctx.broadcast("game:notice", { message: `${state.players[playerId].name}${score === 0 ? "\u4E0D\u53EB" : `\u53EB ${score} \u5206`}` });
-  broadcastAction(ctx, "bidPlaced", { actorId: playerId, value: score, label: score === 0 ? "\u4E0D\u53EB" : `\u53EB ${score} \u5206` });
-  state.rejoinDeadline = null;
-  if (score === 3 || bid.turns >= 3) {
-    if (!bid.highestPlayerId) {
-      ctx.broadcast("game:notice", { message: "\u65E0\u4EBA\u53EB\u5730\u4E3B\uFF0C\u91CD\u65B0\u53D1\u724C" });
-      startRound(ctx);
-      return;
-    }
-    beginPlaying(ctx, bid.highestPlayerId, bid.highestScore);
-    return;
-  }
-  bid.currentPlayerId = nextPlayerId(state, playerId);
-}
-function applyPass(ctx, playerId) {
-  const state = ctx.state;
-  if (state.phase !== "playing" || state.currentPlayerId !== playerId) return;
-  if (!state.lastPlay || state.lastPlay.playerId === playerId) return;
-  state.playedCards.push({ playerId, pass: true });
-  broadcastAction(ctx, "playerPassed", { actorId: playerId, label: "\u4E0D\u51FA" });
-  state.round.passCount += 1;
-  state.rejoinDeadline = null;
-  if (state.round.passCount >= 2) {
-    state.currentPlayerId = state.lastPlay.playerId;
-    state.lastPlay = null;
-    state.round.passCount = 0;
-    broadcastAction(ctx, "trickCleared", { actorId: state.currentPlayerId });
-    return;
-  }
-  state.currentPlayerId = nextPlayerId(state, playerId);
 }
 function sendHand(ctx, playerId) {
   if (!hands[playerId]) return;

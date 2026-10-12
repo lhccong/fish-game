@@ -103,9 +103,6 @@ export class WebWorkerHost implements RoomWorkerHost {
       case 'kick':
         cb.onKick(msg.playerId, msg.reason);
         break;
-      case 'joinable-change':
-        cb.onJoinableChange(msg.joinable);
-        break;
       case 'log':
         cb.onLog(msg.args);
         break;

@@ -13,7 +13,6 @@ import {
   type LobbyRoom,
 } from '../lib/lobbyApi';
 import { buildJoinHashRoute, navigateToPeerJoin } from '../lib/peerRoutes';
-import { loadLocalUser } from '../lib/localUser';
 import { ENABLE_REPLAYS } from '../lib/featureFlags';
 import { resolveJoinTransport } from '../lib/transportConfig';
 
@@ -51,7 +50,6 @@ export function Lobby() {
       return;
     }
     const client = new LobbyClient(baseUrl);
-    const viewerClientId = loadLocalUser().id;
     let active = true;
     let pending = false;
     const refresh = () => {
@@ -59,7 +57,7 @@ export function Lobby() {
       pending = true;
       setRefreshing(true);
       client
-        .listRooms({ viewerClientId })
+        .listRooms()
         .then((rooms) => {
           if (!active) return;
           setOnline(rooms.filter((room) => {
@@ -194,21 +192,14 @@ export function Lobby() {
                         : intl.formatMessage({ id: 'lobby.room.playersCapacity' }, { current: room.playerCount, max: room.maxPlayers })}
                     </span>
                     <Button
-                      // 满员时，仅允许最近掉线的原玩家重新进入。
-                      disabled={!room.joinable && !room.selfRejoinable}
+                      disabled={!room.joinable}
                       onClick={() => {
                         const connectionInfo = room.connectionInfo ?? room.hostPeerId;
                         if (!connectionInfo) return;
                         navigateToPeerJoin(buildJoinHashRoute(room.roomId, connectionInfo, undefined, room.transportConfig));
                       }}
                     >
-                      {room.joinable ? (
-                        <FormattedMessage id="lobby.room.join" />
-                      ) : room.selfRejoinable ? (
-                        <FormattedMessage id="lobby.room.joinGame" />
-                      ) : (
-                        <FormattedMessage id="lobby.room.full" />
-                      )}
+                      <FormattedMessage id={room.joinable ? 'lobby.room.join' : 'lobby.room.full'} />
                     </Button>
                   </CardFooter>
                 </Card>
