@@ -178,9 +178,30 @@ h1 {
 .tile.active-tile { transform: scale(1.075) translateY(-1px); z-index: 5; border-color: rgba(255,255,255,.84); box-shadow: 0 0 0 2px rgba(255,255,255,.75), 0 0 28px rgba(89,177,255,.68); }
 .d-harbor::before { background: #35bfff; }.d-oldtown::before { background: #ff9b50; }.d-tech::before { background: #a27cff; }.d-garden::before { background: #55df95; }.d-finance::before { background: #ffd05a; }.d-skyline::before { background: #ff709c; }
 .tokens { position: absolute; z-index: 4; right: 2px; bottom: 2px; display: flex; flex-wrap: wrap-reverse; gap: 1px; justify-content: end; }
-.token { width: 16px; height: 16px; border-radius: 50% 50% 45% 45%; display: grid; place-items: center; color: #0b1623; background: #fff; border: 1px solid rgba(0,0,0,.3); font-size: 8px; font-weight: 950; box-shadow: 0 3px 6px rgba(0,0,0,.35); }
-.token::after { content: ''; position: absolute; width: 7px; height: 3px; transform: translateY(8px); border-radius: 50%; background: rgba(0,0,0,.35); filter: blur(1px); }
+.token { height: 14px; padding: 0 3px; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; gap: 0; color: #0b1623; background: #fff; border: 1px solid rgba(0,0,0,.3); font-size: 7px; font-weight: 950; box-shadow: 0 2px 5px rgba(0,0,0,.3); white-space: nowrap; max-width: 42px; overflow: hidden; text-overflow: ellipsis; line-height: 1; }
+.token .tok-emoji { font-size: 9px; line-height: 1; }
 .token-1 { background: #ffd45d; }.token-2 { background: #68e39b; }.token-3 { background: #ff86aa; }.token-4 { background: #9b8cff; }.token-5 { background: #5ad5e8; }
+
+.walk-layer {
+  position: absolute; inset: 13px; z-index: 6; pointer-events: none; overflow: hidden;
+  border-radius: 22px;
+}
+.token-walk {
+  --x: 50%;
+  --y: 50%;
+  position: absolute; left: var(--x); top: var(--y);
+  transform: translate(-50%, -50%) scale(1.18);
+  z-index: 7;
+  box-shadow: 0 6px 14px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.65);
+  transition: left 400ms cubic-bezier(.32,.7,.32,1.05), top 400ms cubic-bezier(.32,.7,.32,1.05), transform 220ms ease;
+  animation: tokenBounce 600ms ease-in-out;
+}
+.token-walk.walking { transform: translate(-50%, -50%) scale(1.32); }
+@keyframes tokenBounce {
+  0% { transform: translate(-50%, -50%) scale(.6); }
+  55% { transform: translate(-50%, -55%) scale(1.42); }
+  100% { transform: translate(-50%, -50%) scale(1.18); }
+}
 
 .side-panel { min-height: 0; display: grid; grid-template-rows: auto minmax(0,1fr) auto; gap: 9px; }
 .panel { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--line); background: var(--glass); box-shadow: inset 0 1px rgba(255,255,255,.05), 0 10px 30px rgba(0,0,0,.2); backdrop-filter: blur(14px); }
@@ -279,7 +300,7 @@ h1 {
   .topbar { min-height: 46px; }.topbar > div:first-child { gap: 7px; }.eyebrow { display: none; } h1 { font-size: 22px; }
   .round-pill { padding: 7px 9px; font-size: 9px; }.rules-open { width: 33px; padding: 0; justify-content: center; }.rules-open b { display: none; }
   .board-wrap { min-height: 360px; border-radius: 19px; padding: 7px; }.board { gap: 2px; }
-  .tile { border-radius: 6px; padding: 2px; }.tile::before { height: 3px; }.tile-icon { font-size: 11px; }.tile-name { font-size: 5.7px; }.token { width: 11px; height: 11px; font-size: 6px; }
+  .tile { border-radius: 6px; padding: 2px; }.tile::before { height: 3px; }.tile-icon { font-size: 11px; }.tile-name { font-size: 5.7px; }.token { height: 10px; padding: 0 2px; font-size: 5px; max-width: 26px; } .token .tok-emoji { font-size: 7px; }
   .board-center { inset: 18.5% 18.5%; border-radius: 19px; }.board-center::before { top: 8%; font-size: 6px; }.center-status { font-size: 16px; }.turn-hint { font-size: 8px; }.dice { width: 52px; border-radius: 13px; font-size: 27px; box-shadow: 0 5px 0 #839ab4,0 10px 20px rgba(0,0,0,.3); }
   .side-panel { display: flex; flex-direction: column; }.controls-panel { max-height: none; order: 1; }.me-panel { order: 0; }.market-panel { order: 2; }
   .asset-strip { grid-template-columns: repeat(2,1fr); }

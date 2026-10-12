@@ -175,6 +175,11 @@ function installActionBridge() {
     } catch {
       payload = undefined;
     }
+    if (actionName === 'chooseRoute' && payload && typeof payload === 'object' && 'target' in (payload as any)) {
+      const target = (payload as any).target;
+      const api = (window as any).__walkChooseRoute;
+      if (typeof api === 'function') api(Number(target));
+    }
     parti.action(actionName, payload ?? undefined);
   }, true);
 }
@@ -202,7 +207,293 @@ function installDiceEffects() {
   }
 }
 
+type AnyTile = { id: number; next: number[] };
+type WalkState = {
+  visualPos: number;
+  remaining: number;
+  pendingRoute: number[] | null;
+  speed: number;
+  layer: HTMLElement;
+  inner: HTMLElement;
+  cancelTimer: number | null;
+};
+
+const WALK_LAYER_ID = 'walk-layer';
+const STEP_MS = 400;
+const ROUTE_WAIT_MS = STEP_MS * 4;
+
+function ensureWalkLayer(): HTMLElement {
+  let layer = document.getElementById(WALK_LAYER_ID) as HTMLElement | null;
+  if (layer) return layer;
+  const board = document.getElementById('board');
+  if (!board) {
+    layer = document.createElement('div');
+    layer.id = WALK_LAYER_ID;
+    document.body.appendChild(layer);
+    return layer;
+  }
+  const wrap = board.parentElement!;
+  layer = document.createElement('div');
+  layer.id = WALK_LAYER_ID;
+  layer.className = 'walk-layer';
+  wrap.appendChild(layer);
+  return layer;
+}
+
+function tileCenterPercent(tileId: number): { x: number; y: number } | null {
+  const board = document.getElementById('board');
+  if (!board) return null;
+  const el = board.querySelector<HTMLElement>(`.tile:nth-child(${tileId + 1})`);
+  if (!el) return null;
+  const boardRect = board.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  return {
+    x: ((r.left - boardRect.left + r.width / 2) / boardRect.width) * 100,
+    y: ((r.top - boardRect.top + r.height / 2) / boardRect.height) * 100,
+  };
+}
+
+function buildWalkerToken(player: any, colorIndex: number): HTMLElement {
+  const name = String(player?.name ?? '玩家');
+  const initial = name.slice(0, 1);
+  const token = document.createElement('span');
+  token.className = `token token-walk token-${colorIndex % 6}`;
+  token.innerHTML = `<span class="tok-emoji">🧑</span>${initial}`;
+  return token;
+}
+
+function placeWalker(inner: HTMLElement, pos: number) {
+  const center = tileCenterPercent(pos);
+  if (!center) return;
+  // Disable the CSS transition while we snap the token to a new position,
+  // then restore it. Without this, the freshly-created token (which starts
+  // at the default 50%/50% because --x/--y are unset) would visibly slide
+  // from the board center to the start tile on first placement.
+  const prev = inner.style.transition;
+  inner.style.transition = 'none';
+  inner.style.setProperty('--x', `${center.x}%`);
+  inner.style.setProperty('--y', `${center.y}%`);
+  void inner.offsetWidth;
+  inner.style.transition = prev;
+}
+
+function startStepTransition(inner: HTMLElement, fromPos: number, toPos: number, onDone: () => void) {
+  const from = tileCenterPercent(fromPos);
+  const to = tileCenterPercent(toPos);
+  if (!from || !to) { onDone(); return; }
+  inner.style.setProperty('--x', `${from.x}%`);
+  inner.style.setProperty('--y', `${from.y}%`);
+  inner.classList.remove('walking');
+  void inner.offsetWidth;
+  inner.style.setProperty('--x', `${to.x}%`);
+  inner.style.setProperty('--y', `${to.y}%`);
+  inner.classList.add('walking');
+  const timer = window.setTimeout(() => {
+    inner.classList.remove('walking');
+    onDone();
+  }, STEP_MS);
+  (inner as any)._walkTimer = timer;
+}
+
+function clearWalkerTimers(inner: HTMLElement) {
+  if ((inner as any)._walkTimer) {
+    window.clearTimeout((inner as any)._walkTimer);
+    (inner as any)._walkTimer = null;
+  }
+}
+
+function teardownWalker(state: WalkState) {
+  if (state.cancelTimer) {
+    window.clearTimeout(state.cancelTimer);
+    state.cancelTimer = null;
+  }
+  clearWalkerTimers(state.inner);
+  state.inner.remove();
+}
+
+const walkStates = new Map<string, WalkState>();
+
+function findNext(pos: number, tiles: AnyTile[]): number | null {
+  const tile = tiles.find((t) => t.id === pos);
+  if (!tile || !tile.next?.length) return null;
+  return tile.next[0];
+}
+
+function advanceWalker(playerId: string, tiles: AnyTile[], onArrive: (newPos: number) => void) {
+  const state = walkStates.get(playerId);
+  if (!state) return;
+  const tile = tiles.find((t) => t.id === state.visualPos);
+  if (!tile) { finishWalker(playerId); onArrive(state.visualPos); return; }
+  if (tile.next.length > 1) {
+    // Fork in the road: stop here and let the player pick a route via
+    // window.__walkChooseRoute(...) (which main.ts wires to the UI's
+    // "选择路线" button and to the worker's chooseRoute action).
+    state.pendingRoute = [...tile.next];
+    if (state.cancelTimer) { window.clearTimeout(state.cancelTimer); state.cancelTimer = null; }
+    return;
+  }
+  const next = tile.next[0];
+  if (next == null) { finishWalker(playerId); onArrive(state.visualPos); return; }
+  performStep(playerId, tiles, next, onArrive);
+}
+
+function performStep(playerId: string, tiles: AnyTile[], target: number, onArrive: (newPos: number) => void) {
+  const state = walkStates.get(playerId);
+  if (!state) return;
+  const from = state.visualPos;
+  startStepTransition(state.inner, from, target, () => {
+    state.visualPos = target;
+    state.remaining -= 1;
+    if (state.remaining <= 0) {
+      finishWalker(playerId);
+      onArrive(state.visualPos);
+      return;
+    }
+    advanceWalker(playerId, tiles, onArrive);
+  });
+}
+
+function finishWalker(playerId: string) {
+  const state = walkStates.get(playerId);
+  if (!state) return;
+  teardownWalker(state);
+  walkStates.delete(playerId);
+  markPlayerWalking(playerId, false);
+}
+
+function startWalker(playerId: string, player: any, dice: number, fromPos: number, tiles: AnyTile[], colorIndex: number, onArrive: (newPos: number) => void) {
+  finishWalker(playerId);
+  markPlayerWalking(playerId, true);
+  const layer = ensureWalkLayer();
+  const inner = buildWalkerToken(player, colorIndex);
+  layer.appendChild(inner);
+  placeWalker(inner, fromPos);
+  const state: WalkState = {
+    visualPos: fromPos,
+    remaining: dice,
+    pendingRoute: null,
+    speed: STEP_MS,
+    layer,
+    inner,
+    cancelTimer: null,
+  };
+  walkStates.set(playerId, state);
+  if (dice <= 0) { finishWalker(playerId); onArrive(fromPos); return; }
+  setTimeout(() => advanceWalker(playerId, tiles, onArrive), START_DELAY_MS);
+}
+
+function markPlayerWalking(playerId: string, walking: boolean) {
+  const set = (window as any).__walkActive as Set<string> | undefined;
+  if (!set) return;
+  if (walking) set.add(playerId);
+  else set.delete(playerId);
+  document.dispatchEvent(new CustomEvent('walk:active-changed'));
+}
+
+function chooseWalkerRoute(playerId: string, choice: number, tiles: AnyTile[], onArrive: (newPos: number) => void) {
+  const state = walkStates.get(playerId);
+  if (!state || !state.pendingRoute) return;
+  if (!state.pendingRoute.includes(choice)) return;
+  if (state.cancelTimer) { window.clearTimeout(state.cancelTimer); state.cancelTimer = null; }
+  state.pendingRoute = null;
+  performStep(playerId, tiles, choice, onArrive);
+}
+
+let previousState: any = null;
+const START_DELAY_MS = 1000;
+
+function previousTurnIdChanged(prev: any, next: any) {
+  if (!prev || !next) return false;
+  const a = prev.order?.[prev.turnIndex];
+  const b = next.order?.[next.turnIndex];
+  return a != null && b != null && a !== b;
+}
+
+function installWalkAnimation() {
+  const handle = (state: any) => {
+    if (!state || !state.config?.tiles) return;
+    const tiles: AnyTile[] = state.config.tiles;
+    const order: string[] = state.order || [];
+    const currentTurnId = state.order?.[state.turnIndex];
+    const previousDice = previousState?.dice ?? null;
+    const previousStage = previousState?.stage ?? null;
+    const dice = state.dice ?? null;
+    const stage = state.stage;
+
+    const justRolled = previousStage === 'preRoll' && previousDice == null && dice != null;
+    if (justRolled && currentTurnId) {
+      const player = state.players[currentTurnId];
+      const previousPlayerPos = previousState?.players?.[currentTurnId]?.position ?? 0;
+      if (player) {
+        const colorIndex = order.indexOf(currentTurnId);
+        startWalker(currentTurnId, player, dice, previousPlayerPos, tiles, colorIndex, () => {});
+      }
+    } else if (previousTurnIdChanged(previousState, state)) {
+      Array.from(walkStates.keys()).forEach((id) => finishWalker(id));
+    } else {
+      // The current turn's walker is animated locally (started by justRolled,
+      // advanced by user clicks via __walkChooseRoute). Only desync-handle
+      // remote players or the case where the worker has fully ended the move
+      // (stage === 'manage') and the walker somehow fell behind.
+      order.forEach((pid) => {
+        const ws = walkStates.get(pid);
+        const p = state.players[pid];
+        if (!ws || !p) return;
+        const isLocalWalker = pid === currentTurnId;
+        if (isLocalWalker) {
+          // If worker has moved on to a final manage stage and the walker is
+          // stuck (no pending route, no remaining), snap it to the final
+          // position so the avatar lands correctly.
+          if (
+            stage === 'manage' &&
+            !ws.pendingRoute &&
+            ws.remaining <= 0 &&
+            ws.visualPos !== p.position
+          ) {
+            placeWalker(ws.inner, p.position);
+            ws.visualPos = p.position;
+            finishWalker(pid);
+          }
+          return;
+        }
+        // Remote player: just finish any stale walker; they don't get a
+        // local walking animation in this build.
+        if (ws.visualPos !== p.position) {
+          finishWalker(pid);
+        }
+      });
+    }
+
+    previousState = state;
+  };
+
+  const tryHook = () => {
+    if (typeof (window as any).parti === 'undefined') return false;
+    if ((window as any).__walkHookInstalled) return true;
+    (window as any).parti.onState(handle);
+    (window as any).__walkHookInstalled = true;
+    return true;
+  };
+
+  if (!tryHook()) {
+    const observer = new MutationObserver(() => { if (tryHook()) observer.disconnect(); });
+    observer.observe(document.getElementById('app')!, { childList: true, subtree: true });
+  }
+
+  // Expose minimal API for the existing route-choice click handler in main.ts.
+  (window as any).__walkChooseRoute = (choice: number) => {
+    const state = (window as any).parti.getState();
+    if (!state?.config?.tiles || !state.order) return;
+    const turnId = state.order[state.turnIndex];
+    if (!turnId) return;
+    chooseWalkerRoute(turnId, choice, state.config.tiles, () => {});
+  };
+
+  if (!(window as any).__walkActive) (window as any).__walkActive = new Set<string>();
+}
+
 createBackdrop();
 createRulesManual();
 installActionBridge();
 installDiceEffects();
+installWalkAnimation();

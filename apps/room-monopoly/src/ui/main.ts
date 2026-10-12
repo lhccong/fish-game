@@ -137,9 +137,15 @@ function initBoard() {
   });
 }
 
+function activeWalkPlayerIds() {
+  const set = (window as any).__walkActive as Set<string> | undefined;
+  return set ?? new Set<string>();
+}
+
 function renderBoard() {
   if (!state) return;
   initBoard();
+  const walking = activeWalkPlayerIds();
   state.config.tiles.forEach((tile: any, id: number) => {
     const el = tileEls[id];
     const prop = state.properties[String(id)];
@@ -157,8 +163,13 @@ function renderBoard() {
     } else {
       meta.textContent = '';
     }
-    const here = state.order.filter((pid: string) => state.players[pid]?.position === id);
-    tokens.innerHTML = here.map((pid: string, idx: number) => `<span class="token token-${idx % 6}" title="${escapeHtml(state.players[pid].name)}">${idx + 1}</span>`).join('');
+    const here = state.order.filter((pid: string) => state.players[pid]?.position === id && !walking.has(pid));
+    tokens.innerHTML = here.map((pid: string, idx: number) => {
+      const player = state.players[pid];
+      const name = escapeHtml(player.name);
+      const initial = name.slice(0, 1);
+      return `<span class="token token-${idx % 6}" title="${name}"><span class="tok-emoji">🧑</span>${initial}</span>`;
+    }).join('');
     el.classList.toggle('active-tile', state.pendingPropertyId === id || (state.pendingMove?.choices || []).includes(id));
   });
 }
@@ -278,7 +289,11 @@ function wireDynamicControls() {
     button.onclick = () => {
       if (button.classList.contains('disabled')) return;
       const payload = JSON.parse(decodeURIComponent(button.dataset.payload || 'null'));
-      action(button.dataset.action!, payload ?? undefined);
+      const name = button.dataset.action!;
+      if (name === 'chooseRoute' && payload && typeof (window as any).__walkChooseRoute === 'function') {
+        (window as any).__walkChooseRoute(payload.target);
+      }
+      action(name, payload ?? undefined);
     };
   });
 
@@ -452,5 +467,10 @@ parti.onEvent('game:reset', () => showToast('新一局已创建'));
 parti.onState((nextState) => {
   state = nextState;
   render();
+});
+document.addEventListener('walk:active-changed', () => {
+  // Walker animation just started/stopped — re-render so tile tokens re-sync
+  // with the new walking set.
+  if (state) render();
 });
 parti.ready();
