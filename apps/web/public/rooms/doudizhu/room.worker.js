@@ -503,7 +503,4 @@ function sendHand(ctx, playerId) {
   if (!hands[playerId]) return;
   ctx.send(playerId, "hand:update", { hand: sortCards(hands[playerId]) });
 }
-export {
-  index_default as default
-};
-//# sourceMappingURL=worker.js.map
+export default index_default;

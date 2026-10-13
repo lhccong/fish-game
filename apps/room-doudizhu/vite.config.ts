@@ -22,7 +22,7 @@ function partiWorkerBundle(outDir: string): Plugin {
       for (const file of listFiles(workerDir)) this.addWatchFile(file);
     },
     async closeBundle() {
-      const outfile = path.join(outDir, 'worker.js');
+      const outfile = path.resolve(outDir, 'room.worker.js');
       await esbuild({
         entryPoints: [path.join(workerDir, 'index.ts')],
         outfile,
