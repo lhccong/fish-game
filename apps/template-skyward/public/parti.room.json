@@ -9,7 +9,7 @@
   "cover": "assets/skyward/cover.png",
   "_template_order": 100,
   "author": { "name": "Parti" },
-  "entry": { "ui": "index.html", "worker": "worker.js" },
+  "entry": { "ui": "index.html", "worker": "room.worker.js" },
   "room": { "minPlayers": 1, "maxPlayers": 4 },
   "sync": { "mode": "snapshot" },
   "permissions": {

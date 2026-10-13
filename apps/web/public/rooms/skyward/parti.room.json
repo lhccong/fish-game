@@ -1,0 +1,29 @@
+{
+  "partiVersion": "0.1.0",
+  "protocolVersion": 1,
+  "id": "room-skyward-2",
+  "name": "云端远征",
+  "version": "0.2.0",
+  "packageMode": "filesystem",
+  "description": "跳跃，合作，疯狂！",
+  "tags": ["action", "co-op"],
+  "cover": "assets/skyward-2/cover.png",
+  "_template_order": 101,
+  "author": { "name": "Parti" },
+  "entry": { "ui": "index.html", "worker": "room.worker.js" },
+  "room": { "minPlayers": 1, "maxPlayers": 4 },
+  "sync": { "mode": "snapshot" },
+  "permissions": { "network": false, "storage": "session", "camera": false, "microphone": false, "clipboard": false, "sensors": ["accelerometer", "gyroscope"] },
+  "actions": {
+    "setReady": { "payload": "{ ready: boolean }" },
+    "restart": {},
+    "publishPose": { "payload": "{ sequence: number, x: number, y: number, vy: number, cameraBottom: number, direction: number }" },
+    "shoot": { "payload": "{ shotId: string, x: number, y: number, power: boolean }" },
+    "hitEnemy": { "payload": "{ eventId: string, sequence: number, shotId: string, enemyId: string, damage: number }" },
+    "stompEnemy": { "payload": "{ eventId: string, sequence: number, enemyId: string }" },
+    "landPlatform": { "payload": "{ platformId: string }" },
+    "claimPickup": { "payload": "{ pickupId: string }" },
+    "playerOutcome": { "payload": "{ eventId: string, sequence: number, outcome: 'shield' | 'death', reason: string }" },
+    "enableTilt": { "payload": "{ enabled: boolean }" }
+  }
+}

@@ -11,7 +11,7 @@
   "author": { "name": "Parti" },
   "entry": {
     "ui": "index.html",
-    "worker": "worker.js"
+    "worker": "room.worker.js"
   },
   "room": {
     "minPlayers": 3,

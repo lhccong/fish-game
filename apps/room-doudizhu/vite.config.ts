@@ -57,6 +57,7 @@ export default defineConfig(({ mode }) => {
   if (mode === 'room-build') outDir = roomBuildOutDir!;
 
   return {
+    base: './',
     plugins: [partiWorkerBundle(outDir)],
     build: {
       outDir,

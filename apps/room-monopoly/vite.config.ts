@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => {
     if (!outDir) throw new Error('PARTI_ROOM_BUILD_OUT_DIR is required in room-build mode');
   }
   return {
+    base: './',
     build: {
       outDir,
       emptyOutDir: true,

@@ -8,7 +8,7 @@
   "description": "组合七种元素，穿越遗迹、沼泽与火山的合作 Roguelike 远征",
   "_template_order": 102,
   "author": { "name": "Parti" },
-  "entry": { "ui": "index.html", "worker": "worker.js" },
+  "entry": { "ui": "index.html", "worker": "room.worker.js" },
   "room": { "minPlayers": 1, "maxPlayers": 4 },
   "sync": { "mode": "snapshot" },
   "permissions": { "network": false, "storage": "session", "camera": false, "microphone": false, "clipboard": false, "sensors": [] },

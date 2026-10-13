@@ -22,14 +22,14 @@ function partiWorkerBundle(outDir: string): Plugin {
       for (const file of listFiles(path.resolve(appDir, 'src/game'))) this.addWatchFile(file);
     },
     async closeBundle() {
-      const outfile = path.join(outDir, 'worker.js');
+      const outfile = path.join(outDir, 'room.worker.js');
       await esbuild({
         entryPoints: [path.join(workerDir, 'index.ts')],
         outfile,
         bundle: true,
         format: 'esm',
         target: 'es2022',
-        sourcemap: true,
+        sourcemap: false,
         external: ['@parti/worker-sdk'],
       });
       const source = readFileSync(outfile, 'utf8');
@@ -53,6 +53,7 @@ export default defineConfig(({ mode }) => {
   if (mode === 'room-build') outDir = roomBuildOutDir!;
 
   return {
+    base: './',
     plugins: [partiWorkerBundle(outDir)],
     build: {
       outDir,

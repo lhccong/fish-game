@@ -28,7 +28,7 @@ function workerBundle(outDir: string): Plugin {
         bundle: true,
         format: 'esm',
         target: 'es2022',
-        sourcemap: true,
+        sourcemap: false,
         minify: false,
         external: ['@parti/worker-sdk'],
       });

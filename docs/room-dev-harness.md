@@ -16,7 +16,7 @@ npm run build                  # 生产：所有 room-* build:room → apps/web/
 ## 项目结构与命名
 
 - 应用目录位于 `apps/room-*`（内置 Room，参与根 `npm run build`）或 `apps/template-*`（脚手架/示例，仅开发）。
-- 必须包含 `public/parti.room.json`；`entry.ui` / `entry.worker` 文件名须与构建产物一致（现有 room 多为 `worker.js`，少数如 `room-tank-battle` 用 `room.worker.js`——以 manifest 为准，二者皆可，但必须自洽）。
+- 必须包含 `public/parti.room.json`；`entry.ui` / `entry.worker` 文件名须与构建产物一致（当前所有内置 room 均为 `room.worker.js`）。
 - `template-*` 的 manifest `id` 必须以 `dev-` 开头（由 `scripts/room-app.mjs` 校验）。
 
 ## package.json 脚本

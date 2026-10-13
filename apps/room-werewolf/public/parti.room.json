@@ -9,7 +9,7 @@
   "tags": ["party", "role-playing", "turn-based"],
   "cover": "assets/cover.jpg",
   "author": { "name": "Parti" },
-  "entry": { "ui": "index.html", "worker": "worker.js" },
+  "entry": { "ui": "index.html", "worker": "room.worker.js" },
   "room": { "minPlayers": 6, "maxPlayers": 12, "allowSpectators": false },
   "sync": { "mode": "snapshot" },
   "permissions": { "network": false, "storage": "session", "camera": false, "microphone": false, "clipboard": false, "sensors": [] },

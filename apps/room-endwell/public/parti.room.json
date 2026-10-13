@@ -9,7 +9,7 @@
   "tags": ["role-playing", "action", "co-op"],
   "cover": "cover.jpg",
   "author": { "name": "Parti" },
-  "entry": { "ui": "index.html", "worker": "worker.js" },
+  "entry": { "ui": "index.html", "worker": "room.worker.js" },
   "room": { "minPlayers": 1, "maxPlayers": 4 },
   "sync": { "mode": "snapshot" },
   "permissions": { "network": false, "storage": "session", "camera": false, "microphone": false, "clipboard": false, "sensors": [] },

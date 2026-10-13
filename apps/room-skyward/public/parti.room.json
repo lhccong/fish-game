@@ -10,7 +10,7 @@
   "cover": "assets/skyward-2/cover.png",
   "_template_order": 101,
   "author": { "name": "Parti" },
-  "entry": { "ui": "index.html", "worker": "worker.js" },
+  "entry": { "ui": "index.html", "worker": "room.worker.js" },
   "room": { "minPlayers": 1, "maxPlayers": 4 },
   "sync": { "mode": "snapshot" },
   "permissions": { "network": false, "storage": "session", "camera": false, "microphone": false, "clipboard": false, "sensors": ["accelerometer", "gyroscope"] },

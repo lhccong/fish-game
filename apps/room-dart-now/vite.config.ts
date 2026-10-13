@@ -34,14 +34,14 @@ function workerBundle(outDir: string): Plugin {
     async closeBundle() {
       // vitest 会加载本 config 并在关闭 dev server 时触发 closeBundle——测试不需要 worker 产物
       if (process.env.VITEST) return;
-      const outfile = path.join(outDir, 'worker.js');
+      const outfile = path.join(outDir, 'room.worker.js');
       await esbuild({
         entryPoints: [workerEntry],
         outfile,
         bundle: true,
         format: 'esm',
         target: 'es2022',
-        sourcemap: true,
+        sourcemap: false,
         external: ['@parti/worker-sdk'],
       });
       const source = readFileSync(outfile, 'utf8');
@@ -68,6 +68,7 @@ export default defineConfig(({ mode }) => {
       : path.resolve(appDir, 'dist/package');
 
   return {
+    base: './',
     plugins: [workerBundle(outDir)],
     build: {
       outDir,
