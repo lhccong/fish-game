@@ -693,6 +693,11 @@ function PeerJoinView({
 
   function leaveRoom(): void {
     if (!roomId) return;
+    // joiner 端：先 port.leave() 触发 sys:leave + transport.close()，让 host 走
+    // handleLeave 立即清人；host 端无 port，走 clearRoomSession 走 dispose。
+    if (state?.port) {
+      try { state.port.leave(); } catch { /* 已被关掉则忽略 */ }
+    }
     clearRoomSession(roomId);
     location.replace(`${location.pathname}${location.search}#/`);
   }

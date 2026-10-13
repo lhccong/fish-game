@@ -55,6 +55,14 @@ export class ClientRuntime {
   readonly statusChanged = new Emitter<ConnectionStatus>();
   readonly messageLog = new Emitter<MessageLogEntry>();
 
+  /**
+   * 测试专用：模拟本端传输层意外断开（不走 sys:leave，用于触发 host 侧 soft offline）。
+   * @internal
+   */
+  simulateDisconnect(): void {
+    this.transport.close();
+  }
+
   constructor(options: ClientRuntimeOptions) {
     this.opts = options;
     this.roomId = options.roomId;

@@ -24,6 +24,7 @@ const effects: EngineEffects = {
   onSend: (playerId, event, payload) =>
     post({ kind: 'send', playerId, event, payload }),
   onKick: (playerId, reason) => post({ kind: 'kick', playerId, reason }),
+  onPartiLeave: (playerId) => post({ kind: 'partiLeave', playerId }),
   onLog: (args) => post({ kind: 'log', args }),
   onError: (error) => post({ kind: 'error', error }),
 };

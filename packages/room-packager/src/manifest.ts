@@ -27,6 +27,13 @@ export interface RoomManifest {
   room?: {
     minPlayers?: number;
     maxPlayers?: number;
+    /**
+     * 被动断线后的保留宽限期（毫秒）。默认 30000。
+     * 写 0 表示"常开制"：断线瞬间直接 `onLeave` + 移除，座位立刻空出来给新人补。
+     * 适合无状态休闲 IO（贪吃蛇、画猜等）；牌局/回合制不写。
+     * 主动 `parti.leave()` 不受此配置影响——它走立即清，与 grace 无关。
+     */
+    graceMs?: number;
     allowSpectators?: boolean;
   };
   sync?: {

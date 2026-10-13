@@ -107,8 +107,8 @@ export default defineConfig({
   plugins: [
     {
       name: 'parti-relay',
-      configureServer(server) { if (server.httpServer) attachRelay(server.httpServer); },
-      configurePreviewServer(server) { attachRelay(server.httpServer); },
+      configureServer(server) { if (server.httpServer) attachRelay(server.httpServer as any); },
+      configurePreviewServer(server) { attachRelay(server.httpServer as any); },
     },
     roomRegistryPlugin(),
     authMiddlewarePlugin(),

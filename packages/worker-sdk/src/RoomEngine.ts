@@ -24,6 +24,7 @@ export interface EngineEffects {
   onBroadcast(event: string, payload: unknown): void;
   onSend(playerId: string, event: string, payload: unknown): void;
   onKick(playerId: string, reason: string | undefined): void;
+  onPartiLeave(playerId: string): void;
   onLog(args: unknown[]): void;
   onError(error: { message: string; stack?: string }): void;
 }
@@ -117,6 +118,7 @@ export class RoomEngine {
       send: (playerId, event, payload) =>
         this.effects.onSend(playerId, event, payload ?? null),
       kick: (playerId, reason) => this.effects.onKick(playerId, reason),
+      leave: (playerId) => this.effects.onPartiLeave(playerId),
       log: (...args) => this.effects.onLog(args),
       setTimer: (timerName, ms, callback) =>
         this.setTimer(timerName, ms, callback),

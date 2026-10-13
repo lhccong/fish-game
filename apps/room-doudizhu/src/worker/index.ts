@@ -36,7 +36,7 @@ export default defineRoom<GameState>({
 
     const seat = ctx.state.seats.findIndex((id) => id === null);
     if (seat < 0) {
-      ctx.kick(player.id, '房间已满');
+      ctx.leave(player.id);
       return;
     }
 

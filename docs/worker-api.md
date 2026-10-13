@@ -127,97 +127,62 @@ ctx.clearTimer('round');
 
 `ctx.kick(playerId, reason?)`——把玩家移出房间。
 
-### 房间状态与准入控制（`game:joinable-changed`）
+#### 玩家主动离开 vs 被动掉线
 
-`ctx.broadcast` 的事件名 `game:joinable-changed` 是**协议保留事件**，Runtime
-会拦截并用于控制**是否有新玩家能在当前阶段加入**（大堂列表显示、host 端
-`assertAdmission` 判定都走它）。约定 payload 为 `boolean`：
+| 维度 | 触发方式 | 机制 | worker 何时收到 `onLeave` | 适用场景 |
+|---|---|---|---|---|
+| **主动离开** | 玩家调用 `parti.leave()` | 发送 `sys:leave`，HostRuntime 立即路由进来 | **立即**（不等 grace timer） | 点"退出"按钮 |
+| **被动掉线** | 网络断开 / 刷新 / 标签页关闭 | 不发任何消息，transport 通知 HostRuntime | 宽限期（默认 30s）到期后 | 意外断开 |
 
-```js
-// 例：斗地主 — 进入发牌阶段锁门
-ctx.broadcast('game:joinable-changed', false);
-// 例：结算/流局回 ready 时开门
-ctx.broadcast('game:joinable-changed', true);
+> 两种离开方式的 `onLeave` 回调**行为一致**——都是清理座位、广播 `player:left`。
+> Room 无权控制"何时真正离开"——主动 vs 被动、何时 grace 到期由 HostRuntime
+> 决定，Room 只能在 `onLeave` 里清理自己的业务状态。
+
+#### 断线重连——HostRuntime 自动处理
+
+HostRuntime 自动管理 grace timer：
+
+- 玩家掉线 → 状态设为 `offline`，启动宽限期（默认 30s）
+- 宽限期内带同 `clientId` 重连 → 复用原 `playerId`，触发 `onReconnect`
+- 宽限期到期仍未重连 → 触发 `onLeave`，正式移除
+
+Room **不需要**自己处理 `onDisconnect` 或 grace 逻辑，HostRuntime 全套兜底。
+主动退出（点"退出"按钮）由 ClientRuntime 发送 `sys:leave`，HostRuntime 走
+`handleLeave` 立即清人，不走 grace 计时器。
+
+注意：`ctx.kick(id, reason)` 与 `ctx.leave(id)` 是**两个独立能力**：
+
+| API | 副作用 | 何时用 |
+| --- | --- | --- |
+| `ctx.kick(id, reason)` | **只**给被踢方发 `sys:kick` 通知（reason 文案） | 房间想**警告/告知**玩家，但保留座位 |
+| `ctx.leave(id)` | 立即 `onLeave` + `player.left` 广播 + 移除（与玩家点退出等价） | 房间**真正请人走**（违规、超时占座、规则判定） |
+
+`ctx.leave` 内部走 HostRuntime 的 `handleLeave(peerId)`，立即清人，不依赖
+grace 计时器。playerId 不存在时静默 noop（不报错）。
+
 ```
-
-#### 三种典型策略
-
-| 策略 | 何时发 `false` | 何时发 `true` | 断线重连语义 | 例子 |
-| --- | --- | --- | --- | --- |
-| **锁门制**（回合制短局）| 局中（出牌/叫地主阶段）| 局前/结算 | 局中掉线保留 30s 让稳定身份重连 | 斗地主 |
-| **常开制**（休闲 IO）| 从不 | 始终保持默认值 true | 断线立即清，座位空出来就能补 | 贪吃蛇 |
-| **半锁制**（长局卡牌）| 长局进行中 | 局前/每局结算/重开局 | 局中掉线保留 30s；结算时补人 | 三人麻将 |
-
-#### 默认值 & 何时不调
-
-- **Runtime 默认 `gameJoinable = true`**，且 worker 不发事件就永远是 true。
-- 常开制游戏（贪吃蛇、谁是卧底、画猜）**根本不需要在 worker 里发这个事件**——
-  任何时候新人都能补，座位满则大堂列表自动 disabled "房间已满"。
-- 锁门制游戏（斗地主、麻将、UNO 类）**必须**在状态机每个阶段显式广播，
-  否则会出现"局中新人加进来"或"局后新人被卡在门外"的 bug。
-
-#### 锁门制样板（斗地主）
-
-```js
-function setGameJoinable(joinable) {
-  ctx.broadcast('game:joinable-changed', joinable);
-}
-
 onJoin(ctx, player) {
-  // ... 入座逻辑
-  if (Object.keys(ctx.state.players).length === 3) {
-    ctx.state.phase = 'ready';
+  if (player.name.length > 20) {
+    ctx.leave(player.id);          // 真正请走
+    return;
   }
-},
-
-// 进入出牌阶段 → 锁门
-startRound(ctx) {
-  setGameJoinable(false);
-  // ...
-},
-
-// 结算完成 → 开门
-onRoundSettled(ctx) {
-  setGameJoinable(true);
-  // ...
-},
-
-// 中途有人掉线 / 退到非满员 → 也要开门
-onLeave(ctx, player) {
-  // ... 清理座位
-  if (playersCount < maxPlayers) {
-    setGameJoinable(true); // 显式开门，避免 gameJoinable 残留在 false
+  if (ctx.state.spamCount[player.id] > 3) {
+    ctx.kick(player.id, '发言过快，请稍后再试');  // 只警告，不请走
   }
-},
+}
 ```
 
-#### 断线重连 vs 一断就清——自动按 gameJoinable 决定
+#### 大堂列表（`apps/web` 侧）
 
-worker **不需要**自己处理 `onDisconnect` / 30s 宽限逻辑。HostRuntime 会按
-`gameJoinable` 自动决定：
+`getAdmissionStatus().joinable` 只看容量：`reservedPlayers < maxPlayers`，
+其中 `reservedPlayers` **包含 30s grace 期内仍占位的掉线者**。
 
-- `gameJoinable = true` 时某玩家掉线 → Runtime 立即清掉他（"一断就清"）
-- `gameJoinable = false` 时某玩家掉线 → Runtime 保留 30s 让其凭 `clientId` 重连
+- 未满 → 大堂按钮 enabled（"加入房间"）
+- 满员 → 大堂按钮 disabled（"房间已满"），**包括 grace 期内**——这意味着大堂
+  列表对 grace 期内的掉线者也显示"已满"，**重连必须走 transport 层**
+  （带同 `clientId` 自动 `onReconnect`），不依赖再点大堂按钮。
 
-> 决定这两种行为的是 **`gameJoinable` 当前值**，不是 worker 显式调某个 API。
-> 所以常开制游戏**自动**就是"一断就清"，锁门制游戏**自动**就是"30s 重连"。
-
-#### 大堂列表与按钮行为（`apps/web` 侧）
-
-Runtime 的 `getAdmissionStatus` 把"游戏是否允许新加入"和"是否满员"两个维度分开：
-
-- `joinable = reservedPlayers < maxPlayers && gameJoinable`
-- `gameJoinable` 单独暴露给前端
-
-`apps/web` 的大堂列表条目据此显示：
-
-- 满员 + 你是 30s 内局中掉线者（凭 `clientId`）→ "**加入游戏**"按钮 enabled
-- 满员 + 别人 / 新人 → "房间已满" disabled
-- 未满 → "加入房间" enabled
-- `gameJoinable=false` 会在卡片标题旁显示"**游戏中**"标签
-
-详细的大堂与重连协议见 [`host-runtime.md`](./host-runtime.md) 和
-[`lobby-service.md`](./lobby-service.md)。
+`joinable` 是 HostRuntime 唯一对外的准入信号；房间不需要广播任何准入事件。
 
 ## 4. Action Handler
 

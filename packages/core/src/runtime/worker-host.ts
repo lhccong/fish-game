@@ -15,8 +15,10 @@ export interface RoomWorkerCallbacks {
   onBroadcast(event: string, payload: unknown): void;
   /** room.send(playerId, event, payload) */
   onSend(playerId: string, event: string, payload: unknown): void;
-  /** room.kick(playerId, reason) */
+  /** room.kick(playerId, reason) —— 只发通知，不移除玩家 */
   onKick(playerId: string, reason: string | undefined): void;
+  /** room.parti.leave(playerId) —— 房间主动请玩家离开，立即走 onLeave */
+  onPartiLeave(playerId: string): void;
   /** room.log(...args) */
   onLog(args: unknown[]): void;
   /** worker 内运行时错误 */

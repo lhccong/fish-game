@@ -131,6 +131,7 @@ export async function createPeerHost(
     ...(pkg.manifest.room?.maxPlayers !== undefined
       ? { maxPlayers: pkg.manifest.room.maxPlayers }
       : {}),
+    // 房间退出走 sys:leave 通道，立即通知 host 清人，不走 grace 宽限期。
   });
 
   // 刷新/关闭时主动销毁 peer，尽快释放稳定 id 供下次复用。

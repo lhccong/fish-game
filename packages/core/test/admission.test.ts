@@ -183,7 +183,8 @@ describe('HostRuntime admission', () => {
       credential: '1234',
     });
     const playerId = first.client.getPlayerId();
-    first.client.leave();
+    // 模拟意外断线，触发 host 侧 soft offline
+    first.client.simulateDisconnect();
     await flush();
 
     host.setAdmissionController(passwordController('5678'));

@@ -6,7 +6,7 @@ import { createFlowRoom } from './worker';
 type State = { count: number; joined: string[] };
 const host = { id: 'host', name: 'Host', role: 'host' as const };
 const player = { id: 'p1', name: 'P1', role: 'player' as const };
-function room(state: State) { const timers = new Map<string, () => void>(); return { state, players: [host, player], host, now: () => 100, random: () => .5, broadcast: vi.fn(), send: vi.fn(), kick: vi.fn(), log: vi.fn(), setTimer: vi.fn((name: string, _ms: number, cb: () => void) => timers.set(name, cb)), clearTimer: vi.fn((name: string) => timers.delete(name)), timers }; }
+function room(state: State) { const timers = new Map<string, () => void>(); return { state, players: [host, player], host, now: () => 100, random: () => .5, broadcast: vi.fn(), send: vi.fn(), kick: vi.fn(), leave: vi.fn(), log: vi.fn(), setTimer: vi.fn((name: string, _ms: number, cb: () => void) => timers.set(name, cb)), clearTimer: vi.fn((name: string) => timers.delete(name)), timers }; }
 
 describe('createFlowRoom', () => {
   it('maps lifecycle, validates, normalizes, reduces, relays, and preserves action ids', () => {

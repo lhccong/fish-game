@@ -183,6 +183,7 @@ export class HostRuntime {
       onSend: (playerId, event, payload) =>
         this.handleSend(playerId, event, payload),
       onKick: (playerId, reason) => this.handleKick(playerId, reason),
+      onPartiLeave: (playerId) => this.handlePartiLeave(playerId),
       onLog: (args) => this.logs.emit(args),
       onError: (error) =>
         this.emitError({
@@ -286,6 +287,9 @@ export class HostRuntime {
       case 'sys:hello':
         this.handleHello(peerId, message.payload as HelloPayload);
         break;
+      case 'sys:leave':
+        this.handleLeave(peerId);
+        break;
       case 'sys:ready':
         this.handleReady(peerId, message.payload as ReadyPayload);
         break;
@@ -381,6 +385,22 @@ export class HostRuntime {
     this.emitPlayersChanged();
   }
 
+  /**
+   * 玩家主动离开（非断线）：直接触发 onLeave 并移除，不走 grace 软离线。
+   * 等价于立即执行 worker.leave + players.remove，但走统一的 handleKickCleanup。
+   */
+  private handleLeave(peerId: PeerId): void {
+    const player = this.players.getByPeer(peerId);
+    if (!player) return;
+    // 取消可能存在的 grace timer（如果玩家之前断过线）
+    this.cancelGrace(player.id);
+    this.worker.leave(player);
+    this.players.remove(player.id);
+    this.broadcastEvent('player:left', { id: player.id });
+    this.persist();
+    this.emitPlayersChanged();
+  }
+
   /** 向某 peer 下发 sys:welcome + 当前 state:snapshot（首次加入 / 重连共用）。 */
   private sendWelcome(peerId: PeerId, player: Player): void {
     const welcome: WelcomePayload = {
@@ -437,6 +457,14 @@ export class HostRuntime {
     this.emitPlayersChanged();
   }
 
+  private cancelGrace(playerId: string): void {
+    const handle = this.graceTimers.get(playerId);
+    if (handle !== undefined) {
+      clearTimeout(handle);
+      this.graceTimers.delete(playerId);
+    }
+  }
+
   /** 为离线玩家启动宽限期定时器；期满仍未重连则真正离开。 */
   private scheduleGrace(playerId: string): void {
     this.cancelGrace(playerId);
@@ -452,14 +480,6 @@ export class HostRuntime {
       this.emitPlayersChanged();
     }, ms);
     this.graceTimers.set(playerId, handle);
-  }
-
-  private cancelGrace(playerId: string): void {
-    const handle = this.graceTimers.get(playerId);
-    if (handle !== undefined) {
-      clearTimeout(handle);
-      this.graceTimers.delete(playerId);
-    }
   }
 
   // --- worker 副作用出站 ---
@@ -514,6 +534,11 @@ export class HostRuntime {
     }
   }
 
+  /**
+   * ctx.kick(playerId, reason) —— 只发通知，不移除玩家。
+   * 被踢玩家收到 sys:kick 提示（"你被踢了"），但座位保留。
+   * 用于：房间想警告/提醒玩家，但不立即请走（还能继续玩）。
+   */
   private handleKick(playerId: string, reason: string | undefined): void {
     const player = this.players.get(playerId);
     if (!player || player.id === this.hostPlayer.id) return;
@@ -524,10 +549,17 @@ export class HostRuntime {
       { reason },
       player.id,
     );
-    this.cancelGrace(playerId);
-    this.players.remove(playerId);
-    this.persist();
-    this.emitPlayersChanged();
+  }
+
+  /**
+   * ctx.leave(playerId) —— 房间主动请玩家离开。
+   * 等价于玩家自己点退出：立即触发 worker.onLeave、广播 player:left、持久化。
+   * 不受 grace 影响（grace 是"被动断线"的计时器，主动 leave 直接清）。
+   */
+  private handlePartiLeave(playerId: string): void {
+    const peerId = this.players.get(playerId)?.peerId;
+    if (!peerId) return;
+    this.handleLeave(peerId);
   }
 
   // --- 出站工具 ---

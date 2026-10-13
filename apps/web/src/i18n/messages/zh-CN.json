@@ -165,9 +165,7 @@
       "playersOnline": "{count} 人在线",
       "playersCapacity": "{current} / {max} 人",
       "join": "加入房间",
-      "joinGame": "加入游戏",
-      "full": "房间已满",
-      "inGame": "游戏中"
+      "full": "房间已满"
     },
     "status": {
       "publishing": "正在上架…",

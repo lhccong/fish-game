@@ -214,7 +214,7 @@ var index_default = defineRoom({
     }
     const seat = ctx.state.seats.findIndex((id) => id === null);
     if (seat < 0) {
-      ctx.kick(player.id, "\u623F\u95F4\u5DF2\u6EE1");
+      ctx.leave(player.id);
       return;
     }
     ctx.state.seats[seat] = player.id;
@@ -503,5 +503,7 @@ function sendHand(ctx, playerId) {
   if (!hands[playerId]) return;
   ctx.send(playerId, "hand:update", { hand: sortCards(hands[playerId]) });
 }
-export default index_default;
+export {
+  index_default as default
+};
 //# sourceMappingURL=worker.js.map

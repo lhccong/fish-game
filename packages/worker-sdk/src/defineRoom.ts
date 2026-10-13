@@ -33,6 +33,8 @@ export interface RoomContext<State = any> {
   broadcast(event: string, payload?: unknown): void;
   send(playerId: string, event: string, payload?: unknown): void;
   kick(playerId: string, reason?: string): void;
+  /** 主动请指定玩家离开（立即走 onLeave，不受 grace 影响）。与玩家主动点退出等价。 */
+  leave(playerId: string): void;
   log(...args: unknown[]): void;
 
   setTimer(name: string, ms: number, callback: () => void): void;

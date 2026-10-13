@@ -64,6 +64,14 @@ const host = new HostRuntime({
 房主修改密码或切换准入方式时调用 `host.setAdmissionController(nextController)`。传入
 `undefined` 表示取消额外凭据校验；Runtime 始终保留容量校验。
 
+## 软离线（断线宽限）
+
+被动断线后玩家不会立即从座位清掉：Runtime 启动一个 grace 定时器，期内重连复用
+原 `playerId` 和 Worker `onJoin` 状态。定时器到期（`HostRuntimeOptions.graceMs`，
+默认 `30000`）才真触发 `onLeave` + `player:left` 广播 + 席位释放。
+
+主动退出（`sys:leave` / 房主 `ctx.leave`）不走 grace，立即清。
+
 ## 双阶段校验
 
 `phase: 'package'` 在返回 Room Package 前执行，`phase: 'join'` 在创建 Player 前再次执行。

@@ -51,6 +51,7 @@ export class LocalRoomSession {
       ...(pkg.manifest.room?.maxPlayers !== undefined
         ? { maxPlayers: pkg.manifest.room.maxPlayers }
         : {}),
+      // 房间退出走 sys:leave 通道，立即通知 host 清人。
     });
     await host.start();
     return new LocalRoomSession(pkg, host, adapter);

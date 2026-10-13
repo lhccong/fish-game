@@ -27,6 +27,7 @@ export class InProcessWorkerHost implements RoomWorkerHost {
       onSend: (playerId, event, payload) =>
         this.callbacks?.onSend(playerId, event, payload),
       onKick: (playerId, reason) => this.callbacks?.onKick(playerId, reason),
+      onPartiLeave: (playerId) => this.callbacks?.onPartiLeave(playerId),
       onLog: (args) => this.callbacks?.onLog(args),
       onError: (error) => this.callbacks?.onError(error),
     };

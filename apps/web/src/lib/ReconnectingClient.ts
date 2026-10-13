@@ -66,7 +66,7 @@ export class ReconnectingClient {
       submitAction: (action, payload) =>
         this.runtime?.submitAction(action, payload),
       ready: () => this.runtime?.ready(),
-      leave: () => this.dispose(),
+      leave: () => this.runtime?.leave() ?? this.dispose(),
       onState: (cb) => {
         this.stateCbs.add(cb);
         return () => this.stateCbs.delete(cb);
