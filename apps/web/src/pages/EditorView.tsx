@@ -520,17 +520,17 @@ export function EditorView() {
                 const loadState = templateLoadState(templateLoadStates, template.id);
                 const templateReady = loadState.status === 'ready' && loadedTemplateId === template.id;
                 return (
-                  <div className="relative" key={template.id}>
+                  <div className="relative flex h-full flex-col" key={template.id}>
                     <button
                       type="button"
                       className={cn(
-                        'relative flex w-full cursor-pointer flex-col items-stretch overflow-hidden rounded-[18px] border border-border bg-surface text-left text-foreground shadow-[0_10px_28px_rgba(91,72,15,0.07)] transition-[transform,box-shadow,border-color] duration-150 hover:not-disabled:-translate-y-[3px] hover:not-disabled:border-border-strong hover:not-disabled:shadow-[0_20px_46px_rgba(91,72,15,0.16)]',
+                        'relative flex h-full w-full cursor-pointer flex-col items-stretch overflow-hidden rounded-[18px] border border-border bg-surface text-left text-foreground shadow-[0_10px_28px_rgba(91,72,15,0.07)] transition-[transform,box-shadow,border-color] duration-150 hover:not-disabled:-translate-y-[3px] hover:not-disabled:border-border-strong hover:not-disabled:shadow-[0_20px_46px_rgba(91,72,15,0.16)]',
                         selected && 'border-[#d6a900] shadow-[0_0_0_2px_rgba(214,169,0,0.32),0_18px_44px_rgba(214,169,0,0.18)]',
                       )}
                       onClick={() => chooseTemplate(template)}
                     >
                       <span
-                        className="relative block aspect-[16/10] w-full bg-[linear-gradient(135deg,rgba(155,113,0,0.22),rgba(139,92,246,0.18)_55%,rgba(81,219,147,0.2))] bg-cover bg-center"
+                        className="relative block aspect-[16/10] w-full shrink-0 bg-[linear-gradient(135deg,rgba(155,113,0,0.22),rgba(139,92,246,0.18)_55%,rgba(81,219,147,0.2))] bg-cover bg-center"
                         aria-hidden="true"
                         style={template.cover ? { backgroundImage: `url(${template.cover})` } : undefined}
                       >
@@ -548,9 +548,17 @@ export function EditorView() {
                           </span>
                         )}
                       </span>
-                      <span className="flex flex-col gap-2 px-[13px] pt-3 pb-3.5 md:px-5 md:pt-[18px] md:pb-5">
-                        <b className="text-sm md:text-base">{template.name}</b>
-                        <small className="text-xs font-medium leading-[1.55] text-muted-foreground">
+                      <span className="flex min-h-0 flex-1 flex-col gap-2 px-[13px] pt-3 pb-3.5 md:px-5 md:pt-[18px] md:pb-5">
+                        <b
+                          className="truncate text-sm md:text-base"
+                          title={template.name}
+                        >
+                          {template.name}
+                        </b>
+                        <small
+                          className="line-clamp-2 text-xs font-medium leading-[1.55] text-muted-foreground"
+                          title={templateDescription(intl, template)}
+                        >
                           {templateDescription(intl, template)}
                         </small>
                       </span>

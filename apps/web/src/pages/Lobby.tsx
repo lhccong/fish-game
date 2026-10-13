@@ -170,7 +170,7 @@ export function Lobby() {
             <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-5">
               {online.map((room) => (
                 <Card
-                  className="min-w-0 gap-5 rounded-lg border-border bg-surface py-5 shadow-sm transition-colors hover:border-primary-bright/50"
+                  className="flex h-full min-w-0 flex-col gap-5 rounded-lg border-border bg-surface py-5 shadow-sm transition-colors hover:border-primary-bright/50"
                   key={room.listingId}
                 >
                   <CardHeader className="flex items-center gap-4 px-5">
@@ -179,8 +179,18 @@ export function Lobby() {
                       src={typeof room.metadata?.cover === 'string' ? room.metadata.cover : undefined}
                     />
                     <div className="min-w-0 flex-1">
-                      <CardTitle className="text-lg leading-7 break-words">{room.title}</CardTitle>
-                      <CardDescription className="mt-1 break-all">{room.packageName}</CardDescription>
+                      <CardTitle
+                        className="truncate text-lg leading-7"
+                        title={room.title}
+                      >
+                        {room.title}
+                      </CardTitle>
+                      <CardDescription
+                        className="mt-1 truncate"
+                        title={room.packageName}
+                      >
+                        {room.packageName}
+                      </CardDescription>
                       {room.credentialRequired && <Badge variant="secondary" className="mt-2"><FormattedMessage id="lobby.room.passwordRequired" /></Badge>}
                     </div>
                   </CardHeader>
