@@ -46,6 +46,7 @@ export function blankManifest(locale: AppLocale): string {
     version: '0.1.0',
     packageMode: 'blob',
     description: defaults.roomDescription,
+    cover: 'cover.jpg',
     entry: { ui: 'index.html', worker: 'room.worker.js' },
     room: { minPlayers: 1, maxPlayers: 8 },
     sync: { mode: 'snapshot' },

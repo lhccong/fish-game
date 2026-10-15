@@ -226,11 +226,21 @@ function dosDateTime(now: Date): { date: number; time: number } {
   };
 }
 
-/** 把 files 打成 zip 的 Uint8Array。manifest 名字固定 parti.room.json。 */
-export function filesToZip(files: Record<string, Uint8Array>): Uint8Array {
+/** 把 files 打成 zip 的 Uint8Array。manifest 名字固定 parti.room.json。
+ *  若 files 中没有 parti.room.json 且传入了 manifest 兜底对象,则写入序列化后的 manifest。
+ *  joiner 端按固定名 fetch 不会找不到 (空白创建路径需要这个兑底)。 */
+export function filesToZip(
+  files: Record<string, Uint8Array>,
+  manifestFallback?: { manifest: unknown },
+): Uint8Array {
   const { date, time } = dosDateTime(new Date());
-  const entries = Object.entries(files).filter(([, bytes]) => bytes instanceof Uint8Array);
+  const entries: [string, Uint8Array][] = Object.entries(files)
+    .filter(([, bytes]) => bytes instanceof Uint8Array)
+    .map(([name, bytes]) => [name, bytes as Uint8Array]);
   if (entries.length === 0) throw new Error('filesToZip: files 为空');
+  if (!entries.some(([name]) => name === 'parti.room.json') && manifestFallback) {
+    entries.push(['parti.room.json', textEncoder.encode(JSON.stringify(manifestFallback.manifest, null, 2))]);
+  }
 
   const localChunks: Uint8Array[] = [];
   const centralEntries: Uint8Array[] = [];

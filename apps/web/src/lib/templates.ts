@@ -30,11 +30,28 @@ function isExternalCover(cover: string): boolean {
 }
 
 /** 将持久化包内的相对封面转为无需生命周期管理的 data URL。 */
+const COVER_FALLBACK_EXT = /\.(jpe?g|png|webp|gif|avif)$/i;
+const COVER_FALLBACK_BASENAME = /^cover$/i;
+
+function pickCoverFallback(files: Record<string, Uint8Array>): string | undefined {
+  for (const name of Object.keys(files)) {
+    if (!COVER_FALLBACK_EXT.test(name)) continue;
+    const base = (name.split('/').pop() ?? name).split('.')[0] ?? '';
+    if (COVER_FALLBACK_BASENAME.test(base)) return name;
+  }
+  return undefined;
+}
+
 export function resolveImportedCover(
   cover: string | undefined,
   files: Record<string, Uint8Array>,
 ): string | undefined {
-  if (!cover) return undefined;
+  if (!cover) {
+    // manifest 没写 cover:兜底从 files 找首个 cover.{jpg,png,webp,gif,avif}
+    const fallback = pickCoverFallback(files);
+    if (!fallback) return undefined;
+    return resolveImportedCover(fallback, files);
+  }
   if (isExternalCover(cover)) return cover;
   const path = cover.replace(/^(\.\/)+/, '');
   const bytes = files[path];
