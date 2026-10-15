@@ -14,6 +14,14 @@ Parti 的核心能力：
 > 本篇代码已通过真实 Runtime 跑通验证（座位分配、非法落子拒绝、连线获胜、重开）。
 > 把三个文件放进 `apps/web/public/rooms/tic-tac-toe/` 即可在 `npm run dev` 里游玩。
 
+> ⚠️ **本范例刻意把所有逻辑写在 `room.worker.js` 一个文件里**——包括 `LINES` 常量和
+> `findWinner` 辅助函数。Loader 不会处理相对 import 也不会打包第三方包（见
+> [worker-api §6](./worker-api.md#6-陷阱与约束务必阅读)），所以 worker.js 必须是
+> 自包含单文件。**抄写时**请把所有常量、辅助函数、游戏数据（题库、关卡、地图）
+> 放在 worker.js 内部或模块顶层，**不要拆出 `utils.js` / `data.js` 然后 import**。
+> 同样地，`index.html` 也应把所有 CSS / JS 内联，或者把外部文件加进 manifest 的
+> `entry.style` / `entry.client`，否则不会被加载。
+
 先复习一下心智模型（详见 [快速开始](./getting-started.md)）：
 
 ```txt

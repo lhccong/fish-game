@@ -269,6 +269,36 @@ export default defineRoom({
 `sys:` 和 `state:` 是协议保留前缀；`__error` 是内部保留事件名。自定义事件请用
 `game:` 或自己的命名空间（如 `counter:incremented`、`guess:wrong`），避免冲突。
 
+### 5) Web Worker 里有 / 没有什么全局
+
+worker.js 运行在真实 Web Worker（不是 Node.js 也不是浏览器主线程），下面这些
+浏览器 API 的可用性是 AI 经常猜错的地方，请按这张表写：
+
+| API | 可用？ | 备注 |
+| --- | --- | --- |
+| `self` / `postMessage` / `addEventListener` | ✅ | Worker 标配 |
+| `setTimeout` / `setInterval` / `clearTimeout` / `clearInterval` | ✅ | 浏览器 Worker 有 |
+| `Promise` / `async` / `await` | ✅ | 浏览器 Worker 有 |
+| `Map` / `Set` / `WeakMap` / `WeakRef` | ✅ | 标准 ES 全有 |
+| `crypto.getRandomValues` / `crypto.subtle` | ✅ | 浏览器 Worker 有 |
+| `Math` / `Date` / `JSON` / `console` | ✅ | 标准 |
+| `fetch` | ❌ | Worker 默认没有 `fetch`；Parti 也未提供 |
+| `XMLHttpRequest` | ❌ | 同上 |
+| `WebSocket` / `EventSource` | ❌ | 同上 |
+| `localStorage` / `sessionStorage` / `indexedDB` | ❌ | Worker 拿不到 |
+| `document` / `window` / `navigator` | ⚠️ | Worker 没有 `document` 和 `window`；`navigator.userAgent` 可读但别依赖它做协议判断 |
+| `importScripts(url)` | ⚠️ | 语法上能用，但加载的内容**仍是同一 worker.js 的运行时**；不能 import 第三方 npm 包 |
+| 任何 npm / 第三方模块 | ❌ | Loader 不会打包，相对 import 也不会处理——见 [§6.1](#1-只能-import--defineroom不能-import-任何第三方包) |
+
+**实战建议**：
+- 延迟逻辑用 `ctx.setTimer(name, ms, cb)`（[§3](#3-roomcontextctx)），它会随
+  Room 生命周期一起管理，重连时也会被 Runtime 复位。
+- 真要 sleep 用 `await new Promise(r => setTimeout(r, ms))`——但**没有超时取消
+  机制**，玩家中途离开 promise 还会跑，记得自己判 `ctx.players`。
+- 随机数优先 `ctx.random()`（同步、可复现），不要用 `Math.random`——前者方便
+  未来加入回放/调试。
+- 不要自己发起网络请求；游戏要"对战"就由 Worker 维护状态，不要尝试 P2P。
+
 ## 7. 完整示例
 
 把以上 API 串起来的完整游戏见 [示例：井字棋](./example-tic-tac-toe.md)。

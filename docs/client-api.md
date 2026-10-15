@@ -99,6 +99,24 @@ Blob 与 filesystem package 统一运行在
 - 不需要、也不能 `import` SDK——`parti` 是注入的全局对象。
 - 普通的 DOM 操作、内联 `<style>`、`<script>` 都正常可用。
 
+### iframe 沙箱里这些浏览器 API 行为有变化（写代码前知道）
+
+- **`window` 指向 iframe 自己**——不是宿主页。`window.parent` 拿不到、跨 iframe
+  通信请用 `parti` 而不是 `parent.postMessage`。
+- **`screen.orientation` / `window.orientation` 在多数浏览器 iframe 中为
+  `undefined`**——依赖陀螺仪/方向感知的玩法请用 `parti` + manifest 声明
+  `permissions.sensors`（[manifest.md](./manifest.md)），不要直接读 orientation。
+- **`BroadcastChannel` 受同源沙箱限制**，跨标签页共享状态可能失败，**别用它做
+  多人同步**——多人状态永远走 Worker 权威。
+- **跨域 `localStorage` / `Cookie` 行为受沙箱策略影响**——manifest 里的
+  `permissions.storage` 是 Parti 级别的本地存储配额声明，**游戏持久化请用它
+  而不是直接 `localStorage.setItem`**，后者在不同浏览器沙箱策略下行为不一致。
+- **iframe 视口尺寸是房间容器给的**，不是设备真实视口。`window.innerWidth`
+  在桌面 / 平板 / 手机三种虚拟外框下会变，但**旋转设备时不会自动重排**——UI
+  请用 CSS `vw/vh` + 媒体查询，不要写死 `320px`。见 [快速开始 §5](./getting-started.md#5-ui-最佳实践避开右上角胶囊)。
+- **没有 `window.alert` 弹窗在 iOS Safari iframe 里会失效**——想给玩家提示请
+  自己用 DOM 画一个 toast / 浮层，不要依赖系统弹窗。
+
 ## 3. 推荐写法：onState 重渲染 + onEvent 处理瞬时反馈
 
 ```js

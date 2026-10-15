@@ -66,6 +66,33 @@ ZIP、GitHub 导入和内置房间会收集 package 根目录中的全部文件�
 对应目录，并与市场预检使用同一套“合法 manifest + 全部声明入口”候选规则。Worker 目前仍为
 单入口源码，不支持相对模块 import。
 
+## Entry 字段：必须列出 package 里你想加载的全部文件
+
+`entry` 不仅要写主入口，**任何会在运行时被 fetch 的文件都必须显式声明**，否则 Runtime
+不会去取它们，AI 也容易踩坑：
+
+| 字段 | 用途 | 不写会怎样 |
+| --- | --- | --- |
+| `entry.ui` | `index.html`（必填） | 整个房间没 UI |
+| `entry.worker` | `room.worker.js`（必填） | 房间逻辑跑不起来 |
+| `entry.style` | 可选的独立 CSS 文件 | HTML 里 `<link rel="stylesheet" href="style.css">` 会 404 |
+| `entry.client` | 可选的额外客户端 JS | HTML 里 `<script src="client.js">` 会 404 |
+
+**典型反模式**（AI 经常犯）：
+
+- 把 CSS 拆到 `style.css` 然后在 `index.html` 里 `<link>`，但 manifest 没写
+  `entry.style` → 样式不生效。
+- 把游戏绘图逻辑拆到 `client.js` 然后在 HTML 里 `<script src="client.js">`，
+  manifest 没写 `entry.client` → 报 404。
+- 把素材放在 `assets/` 但在 HTML 里 `<img src="assets/foo.png">` 引用 →
+  `blob` 模式下相对路径不工作；`filesystem` 模式 + Service Worker 才能解析
+  相对资源（见上一节"Package 文件与加载模式"）。
+
+**最稳的做法**：把 CSS、JS、音视频直接内联进 `index.html`，让 `entry` 只剩
+`ui` + `worker` 两个字段。这样不需要 Service Worker、不需要相对路径，复制
+粘贴就能跑。本仓库所有内置房间（counter / tic-tac-toe / guess-word 等）都
+采用这种写法。
+
 ## 权限与沙箱
 
 MVP 阶段建议尽量保守：
