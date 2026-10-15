@@ -44,7 +44,6 @@ import { MarketSection } from '@/components/editor/MarketSection';
 import type { AiRoomFiles } from '@/components/editor/parseAiRoomMarkdown';
 import {
   buildTemplateCategories,
-  isSimpleTemplateId,
   normalizeTemplateCategory,
   templatesInCategory,
   type TemplateCategoryId,
@@ -78,6 +77,7 @@ export function EditorView() {
   const [manifestText, setManifestText] = useState(() => blankManifest(locale));
   const [htmlText, setHtmlText] = useState(() => getDefaultHtml(locale));
   const [workerText, setWorkerText] = useState(DEFAULT_WORKER);
+  // 写法:直接调 setExtraFiles。manifest.cover 字段由用户自行在 manifest 标签中维护。
   const [extraFiles, setExtraFiles] = useState<Record<string, Uint8Array>>({});
   const [activeFile, setActiveFile] = useState<EditorFile>('manifest');
   const [templates, setTemplates] = useState<TemplateListEntry[]>([]);
@@ -105,10 +105,41 @@ export function EditorView() {
     clipboardReadFailed: boolean;
   } | null>(null);
   const aiImportRouteHandledRef = useRef(false);
+  const loadedTemplateIdRef = useRef<string>('blank');
 
   useEffect(() => {
     selectedTemplateIdRef.current = selectedTemplateId;
   }, [selectedTemplateId]);
+
+  // 模板卡片「继续编辑」入口:跟删除按钮条件一致(只对用户模板显示),
+  // 不要求 templateReady —— 点编辑时自动选中 + 加载完后打开编辑器。
+  async function openEditorForTemplate(template: SelectableTemplate): Promise<void> {
+    if (template.id === 'blank') {
+      openBlankEditor();
+      return;
+    }
+    setSelectedTemplateId(template.id);
+    setError(null);
+    setPendingTemplate(null);
+    const cached = templateLoadStates[template.id];
+    if (cached?.status === 'ready') {
+      applyPackageToEditor(cached.pkg, template.id);
+      setShowEditor(true);
+      return;
+    }
+    if (cached?.status !== 'loading') {
+      void startTemplateLoad(template.id);
+    }
+    // 等加载完(loadedTemplateId === template.id 由 startTemplateLoad -> applyPackageToEditor 设置)
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      if (loadedTemplateIdRef.current === template.id) {
+        setShowEditor(true);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
 
   useEffect(() => {
     if (marketShareRoute) setActiveCategory('market');
@@ -139,6 +170,7 @@ export function EditorView() {
       ),
     );
     setLoadedTemplateId(templateId);
+    loadedTemplateIdRef.current = templateId;
     setActiveFile('manifest');
     setDirty(false);
   }
@@ -149,6 +181,7 @@ export function EditorView() {
     setWorkerText(DEFAULT_WORKER);
     setExtraFiles({});
     setLoadedTemplateId('blank');
+    loadedTemplateIdRef.current = 'blank';
     setActiveFile('manifest');
     setDirty(false);
   }
@@ -518,7 +551,6 @@ export function EditorView() {
               {visibleTemplates.map((template) => {
                 const selected = selectedTemplateId === template.id;
                 const loadState = templateLoadState(templateLoadStates, template.id);
-                const templateReady = loadState.status === 'ready' && loadedTemplateId === template.id;
                 return (
                   <div className="relative flex h-full flex-col" key={template.id}>
                     <button
@@ -573,12 +605,12 @@ export function EditorView() {
                         </span>
                       )}
                     </button>
-                    {selected && templateReady && (isSimpleTemplateId(template.id) || template.imported) && (
+                    {template.removable && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="absolute top-2.5 left-2.5 z-[2] h-auto gap-[3px] px-2 py-[3px] text-[11px] [&_svg]:size-3 bg-background/60"
-                        onClick={() => setShowEditor(true)}
+                        onClick={() => void openEditorForTemplate(template)}
                       >
                         <PencilIcon data-icon="inline-start" /><FormattedMessage id="editor.template.continueEdit" />
                       </Button>

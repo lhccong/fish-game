@@ -180,6 +180,9 @@
   "editor": {
     "backToLobby": "← Back to lobby",
     "backToTemplates": "Back to templates",
+    "return": {
+      "loading": "Loading source…"
+    },
     "title": "Create online room",
     "description": "Pick a template to start building, then invite friends when you're ready.",
     "aiCreateAria": "Create room with AI",
@@ -487,6 +490,7 @@
   "local": {
     "loadFailed": "Load failed: {error}",
     "backToLobby": "Back to lobby",
+    "backToEditor": "Back to editor",
     "loading": "Loading room package and starting runtime…",
     "title": "Local multiplayer preview · {name}",
     "seat": {

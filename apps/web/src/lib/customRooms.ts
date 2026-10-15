@@ -73,7 +73,7 @@ export async function createRoomSnapshot(
     try {
       const userId = getCurrentUserId();
       if (userId === 'anon') throw new UploadRequiresLoginError();
-      const zipBytes = filesToZip(baseRecord.files);
+      const zipBytes = filesToZip(baseRecord.files, { manifest: baseRecord.manifest });
       const zipBuffer = zipBytes.buffer.slice(zipBytes.byteOffset, zipBytes.byteOffset + zipBytes.byteLength) as ArrayBuffer;
       const uploaded = await uploadBlobToBackend({
         userId,
@@ -137,10 +137,25 @@ export async function createRoomSnapshot(
   return { roomId, ...(customRecord ? { customPackageId: customRecord.id } : {}) };
 }
 
+export interface LoadedRoomSnapshot {
+  package: RoomPackage;
+  source: PackageSourceInfo;
+}
+
 export async function loadRoomSnapshot(roomId: string): Promise<RoomPackage> {
   const record = await (await getDb()).get('roomSnapshots', roomId);
   if (!record) throw new RoomSnapshotNotFoundError(roomId);
   return { manifest: record.manifest, files: record.files, packageHash: record.packageHash };
+}
+
+/** 同 loadRoomSnapshot，但顺带返回 source，便于判断"是否可以返回编辑代码"。 */
+export async function loadRoomSnapshotWithSource(roomId: string): Promise<LoadedRoomSnapshot> {
+  const record = await (await getDb()).get('roomSnapshots', roomId);
+  if (!record) throw new RoomSnapshotNotFoundError(roomId);
+  return {
+    package: { manifest: record.manifest, files: record.files, packageHash: record.packageHash },
+    source: record.source,
+  };
 }
 
 export type RoomDownloadSource =

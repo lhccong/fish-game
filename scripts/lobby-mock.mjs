@@ -219,7 +219,8 @@ function corsHeaders(req) {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+    'Access-Control-Allow-Headers':
+      'Content-Type,Authorization,X-Upload-User-Id,X-Upload-Template-Id',
     'Access-Control-Max-Age': '600',
     Vary: 'Origin',
   };

@@ -75,6 +75,10 @@ button.onclick = () => parti.action('mark', { cell: 4 });
 告诉 Runtime「本玩家已就绪」，触发逻辑侧 `onReady(ctx, player)`。**幂等**，重复调用无副作用。
 许多简单房间在脚本末尾直接调用一次即可。
 
+> 玩家在 UI 里点「我准备好了」按钮的交互，请走 `parti.action('toggleReady')` 而不是
+> 直接调 `parti.ready()`——后者在 Runtime 端按 playerId 去重，取消准备后再点
+> 不会送达 worker。完整模式见 [worker-api.md](./worker-api.md#5-玩家点准备按钮该走哪个通道)。
+
 ### `parti.leave(): void`
 
 主动离开房间。

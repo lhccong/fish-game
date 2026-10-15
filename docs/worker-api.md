@@ -269,7 +269,44 @@ export default defineRoom({
 `sys:` 和 `state:` 是协议保留前缀；`__error` 是内部保留事件名。自定义事件请用
 `game:` 或自己的命名空间（如 `counter:incremented`、`guess:wrong`），避免冲突。
 
-### 5) Web Worker 里有 / 没有什么全局
+### 5) 玩家点准备按钮该走哪个通道
+
+`parti.ready()` 在 Runtime 端按 playerId **去重**：某个玩家调过一次后，后续再调
+都不会把信号送到 worker，**worker 端 `onReady` 不会再次触发**。所以
+「点完准备再取消、再点准备」用 `parti.ready()` 写不出来——按钮交互必须走 action 通道。
+
+```js
+// 客户端:按钮切换就绪状态(每次都送达,不受 Runtime 去重影响)
+button.onclick = () => parti.action('toggleReady');
+
+// Worker:把"就绪 / 取消就绪"放在同一个 handler 里
+const PHASE = { WAIT: 'waiting', READY: 'ready', ARMED: 'armed' };
+
+actions: {
+  toggleReady(ctx, { player }) {
+    const p = ctx.state.players[player.id];
+    if (!p) return;
+    p.ready = !p.ready;
+    if (p.ready) advancePhase(ctx);                              // 有人就绪 -> 推进
+    else if (ctx.state.phase === PHASE.ARMED) ctx.state.phase = PHASE.READY; // 取消就绪 -> 回退
+  },
+}
+
+function advancePhase(ctx) {
+  if (ctx.state.phase === PHASE.WAIT) ctx.state.phase = PHASE.READY;
+  if (ctx.state.phase === PHASE.READY && allReady(ctx.state)) ctx.state.phase = PHASE.ARMED;
+}
+
+function allReady(s) {
+  const ids = Object.keys(s.players);
+  return ids.length > 0 && ids.every(id => s.players[id].ready);
+}
+```
+
+> 入场即就绪仍然可以用 `parti.ready()`(末尾调一次即可),它会走 `onReady` 通道;
+> `onReady` 与按钮的"就绪"分支共享同一份 `p.ready` 字段即可。
+
+### 6) Web Worker 里有 / 没有什么全局
 
 worker.js 运行在真实 Web Worker（不是 Node.js 也不是浏览器主线程），下面这些
 浏览器 API 的可用性是 AI 经常猜错的地方，请按这张表写：

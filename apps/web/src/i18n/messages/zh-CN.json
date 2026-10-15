@@ -180,6 +180,9 @@
   "editor": {
     "backToLobby": "← 返回大厅",
     "backToTemplates": "返回选择模板",
+    "return": {
+      "loading": "正在加载源码…"
+    },
     "title": "创建联机房间",
     "description": "选择一个模板开始创作，完成后立即邀请朋友加入。",
     "aiCreateAria": "使用 AI 创建房间",
@@ -487,6 +490,7 @@
   "local": {
     "loadFailed": "加载失败：{error}",
     "backToLobby": "返回大厅",
+    "backToEditor": "返回编辑代码",
     "loading": "正在加载 Room Package 并启动 Runtime…",
     "title": "本地多人预览 · {name}",
     "seat": {

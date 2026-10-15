@@ -1,12 +1,13 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
-import { PlusIcon } from 'lucide-react';
+import { PlusIcon, ArrowLeftIcon } from 'lucide-react';
 import type { RoomClientPort } from '@parti/client-sdk';
 import { type RoomPackage } from '@parti/room-packager';
 import { ROOM_FRAME_GRID_AREAS, RoomFrame, type RoomFrameGridKey } from '../components/RoomFrame';
 import { DevTools } from '../components/DevTools';
 import { LocalRoomSession } from '../lib/LocalRoomSession';
-import { loadRoomSnapshot } from '../lib/customRooms';
+import { loadRoomSnapshotWithSource } from '../lib/customRooms';
+import type { PackageSourceInfo } from '../lib/db';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +46,7 @@ interface Seat {
 interface Loaded {
   session: LocalRoomSession;
   pkg: RoomPackage;
+  source: PackageSourceInfo;
   seats: Seat[];
 }
 
@@ -64,7 +66,7 @@ export function LocalRoomView({ roomId }: { roomId: string }) {
     let session: LocalRoomSession | undefined;
 
     (async () => {
-      const pkg = await loadRoomSnapshot(roomId);
+      const { package: pkg, source } = await loadRoomSnapshotWithSource(roomId);
       session = await LocalRoomSession.create(pkg);
       const hostPort = session.hostPort();
       const p1 = await session.addPlayer('Alice');
@@ -76,6 +78,7 @@ export function LocalRoomView({ roomId }: { roomId: string }) {
       setLoaded({
         session,
         pkg,
+        source,
         seats: [
           {
             id: 'host',
@@ -188,9 +191,26 @@ export function LocalRoomView({ roomId }: { roomId: string }) {
   return (
     <div className="mx-auto w-[min(1240px,100%)]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-semibold">
-          {intl.formatMessage({ id: 'local.title' }, { name: loaded.pkg.manifest.name })}
-        </h2>
+        <div className="flex items-center gap-3">
+          {loaded.source.type !== 'builtin' && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-muted-foreground"
+              onClick={() => {
+                const targetId = loaded.source.type === 'custom' ? loaded.source.id : (loaded.pkg.manifest.id ?? roomId);
+                window.location.hash = `#/editor/return/${encodeURIComponent(targetId)}`;
+              }}
+            >
+              <ArrowLeftIcon />
+              <FormattedMessage id="local.backToEditor" />
+            </Button>
+          )}
+          <h2 className="text-2xl font-semibold">
+            {intl.formatMessage({ id: 'local.title' }, { name: loaded.pkg.manifest.name })}
+          </h2>
+        </div>
         <div className="flex items-center gap-3">
           {maxPlayers !== undefined && (
             <span className="text-xs text-muted-foreground">
