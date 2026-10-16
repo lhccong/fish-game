@@ -78,6 +78,7 @@ Runtime 封装掉了。
 ### `room.worker.js`（逻辑）
 
 ```js
+// ⚠️ 必须！不可省略，不可用其他写法替代。
 import { defineRoom } from '@parti/worker-sdk';
 
 export default defineRoom({

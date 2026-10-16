@@ -412,8 +412,7 @@ export function EditorView() {
   const selectionReady = selectedTemplateReady && !(activeCategory === 'market' && marketCardSelected);
   const goCreate = showEditor || !isBlank;
   const selectedEntry = templates.find((t) => t.id === selectedTemplateId);
-  const showLocalPreview =
-    import.meta.env.DEV || showEditor || Boolean(selectedEntry?.imported);
+  const showLocalPreview = Boolean(selectedEntry?.removable);
   const fileValue = activeFile === 'manifest' ? manifestText : activeFile === 'html' ? htmlText : workerText;
   const fileLabel = activeFile === 'manifest' ? 'parti.room.json' : activeFile === 'html' ? 'index.html' : 'room.worker.js';
 
