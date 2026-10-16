@@ -383,7 +383,7 @@ var index_default = defineRoom({
         if (moveColor !== st.turn) return;
         if (st.gameType === "gomoku") {
           st.board[r][c] = moveColor;
-          st.moves.push({ r, c, color: moveColor });
+          st.moves.push({ r, c, color: moveColor, turnBefore: st.turn });
           st.lastMove = { r, c };
           st.turn = moveColor === BLACK ? WHITE : BLACK;
         } else {
@@ -391,7 +391,7 @@ var index_default = defineRoom({
           const res = goPlaceStone(testBoard, r, c, moveColor);
           if (!res) return;
           st.board = testBoard;
-          st.moves.push({ r, c, color: moveColor, captured: res.captured });
+          st.moves.push({ r, c, color: moveColor, captured: res.captured, turnBefore: st.turn });
           st.lastMove = { r, c };
           if (moveColor === BLACK) st.capturedB += res.captured.length;
           else st.capturedW += res.captured.length;
@@ -404,7 +404,7 @@ var index_default = defineRoom({
       if (st.board[r][c] !== EMPTY) return;
       const myColor = player.id === st.blackPlayer ? BLACK : player.id === st.whitePlayer ? WHITE : 0;
       if (!myColor || myColor !== st.turn) return;
-      st.moves.push({ r, c, color: st.turn });
+      st.moves.push({ r, c, color: st.turn, turnBefore: st.turn });
       if (st.gameType === "gomoku") {
         st.board[r][c] = st.turn;
         st.lastMove = { r, c };
@@ -436,6 +436,7 @@ var index_default = defineRoom({
         if (!res) return;
         st.board = testBoard;
         st.lastMove = { r, c };
+        st.moves.push({ r, c, color: st.turn, captured: res.captured, turnBefore: st.turn });
         if (st.turn === BLACK) st.capturedB += res.captured.length;
         else st.capturedW += res.captured.length;
         st.passes = 0;
@@ -508,33 +509,30 @@ var index_default = defineRoom({
       if (st.finished) return;
       if (st.phase !== "playing") return;
       if (st.mode === "ai") {
-        const steps = st.moves.length;
-        if (steps === 0) return;
-        const last = st.moves.pop();
-        st.board[last.r][last.c] = EMPTY;
-        if (steps >= 2) {
-          const prev = st.moves.pop();
-          st.board[prev.r][prev.c] = EMPTY;
-        }
-        st.lastMove = st.moves.length ? st.moves[st.moves.length - 1] : null;
-        st.turn = BLACK;
+        if (st.moves.length < 2) return;
+        const playerColor = st.hostSide === "white" ? WHITE : BLACK;
+        const playerUndoKey = playerColor === BLACK ? "black" : "white";
         st.undoCount = st.undoCount || { black: 2, white: 2 };
-        st.undoCount.black = Math.max(0, (st.undoCount.black || 0) - 1);
-        if (st.gameType === "go") {
-          st.capturedB = 0;
-          st.capturedW = 0;
-        }
+        if ((st.undoCount[playerUndoKey] || 0) < 1) return;
+        undoTo(st, st.moves.length - 2);
+        st.undoCount[playerUndoKey] = Math.max(0, (st.undoCount[playerUndoKey] || 0) - 1);
         bumpActivity(ctx);
         return;
       }
       const myColor = player.id === st.blackPlayer ? BLACK : player.id === st.whitePlayer ? WHITE : 0;
       if (!myColor) return;
-      if (myColor === st.turn) return;
       if (st.moves.length === 0) return;
+      const myTurn = myColor === st.turn;
+      const steps = myTurn ? 2 : 1;
+      if (st.moves.length < steps) return;
+      if (!myTurn) {
+        const last = st.moves[st.moves.length - 1];
+        if (last.color !== myColor) return;
+      }
       const remain = st.undoCount && st.undoCount[myColor === BLACK ? "black" : "white"] || 0;
       if (remain <= 0) return;
       if (st.pendingRequest) return;
-      st.pendingRequest = { type: "undo", from: player.id, createdAt: ctx.now() };
+      st.pendingRequest = { type: "undo", from: player.id, createdAt: ctx.now(), steps };
       ctx.broadcast("requestPending", { type: "undo", from: player.id });
       ctx.setTimer("request-timeout", st.requestTimeoutMs, () => autoRejectRequest(ctx, "undo"));
     },
@@ -662,6 +660,18 @@ var index_default = defineRoom({
       } else if (req.type === "rematch") {
         startMatch(ctx);
         ctx.broadcast("restarted", {});
+      } else if (req.type === "undo") {
+        const steps = req.steps || 1;
+        const targetPly = Math.max(0, st.moves.length - steps);
+        undoTo(st, targetPly);
+        const fromColor = req.from === st.blackPlayer ? BLACK : req.from === st.whitePlayer ? WHITE : 0;
+        if (fromColor) {
+          const key = fromColor === BLACK ? "black" : "white";
+          st.undoCount = st.undoCount || { black: 2, white: 2 };
+          st.undoCount[key] = Math.max(0, (st.undoCount[key] || 0) - 1);
+        }
+        bumpActivity(ctx);
+        ctx.broadcast("requestAccepted", { type: "undo", by: player.id });
       } else if (req.type === "resign") {
         const loserColor = req.from === st.blackPlayer ? BLACK : req.from === st.whitePlayer ? WHITE : 0;
         const winner = loserColor === BLACK ? WHITE : BLACK;
@@ -695,20 +705,10 @@ var index_default = defineRoom({
         const requesterColor = req.from === st.blackPlayer ? BLACK : req.from === st.whitePlayer ? WHITE : 0;
         if (requesterColor === BLACK) st.undoCount.black = Math.max(0, (st.undoCount.black || 0) - 1);
         else if (requesterColor === WHITE) st.undoCount.white = Math.max(0, (st.undoCount.white || 0) - 1);
-        if (st.moves.length > 0) {
-          const last = st.moves.pop();
-          st.board[last.r][last.c] = EMPTY;
-        }
-        if (st.moves.length > 0) {
-          const prev = st.moves.pop();
-          st.board[prev.r][prev.c] = EMPTY;
-        }
-        st.lastMove = null;
-        st.turn = requesterColor;
-        if (st.gameType === "go") {
-          st.capturedB = 0;
-          st.capturedW = 0;
-        }
+        if (st.moves.length === 0) return;
+        const steps = req.steps || 1;
+        if (st.moves.length < steps) return;
+        undoTo(st, st.moves.length - steps);
         bumpActivity(ctx);
       }
     }
@@ -773,6 +773,32 @@ function tickTimeouts(ctx) {
       const winner = loser === BLACK ? WHITE : BLACK;
       finishGame(ctx, winner, "\u5BF9\u5C40\u8D85\u65F6");
     }
+  }
+}
+function undoTo(st, ply) {
+  while (st.moves.length > ply) {
+    const m = st.moves.pop();
+    if (!m) break;
+    st.board[m.r][m.c] = EMPTY;
+    if (m.captured && m.captured.length) {
+      for (const cap of m.captured) {
+        const capColor = m.color === BLACK ? WHITE : BLACK;
+        st.board[cap.r][cap.c] = capColor;
+        if (m.color === BLACK) st.capturedB = Math.max(0, st.capturedB - 1);
+        else st.capturedW = Math.max(0, st.capturedW - 1);
+      }
+    }
+    if (typeof m.turnBefore === "number") {
+      st.turn = m.turnBefore;
+    }
+  }
+  st.lastMove = st.moves.length ? { r: st.moves[st.moves.length - 1].r, c: st.moves[st.moves.length - 1].c } : null;
+  if (st.finished || st.winner !== 0 || st.winLine) {
+    st.finished = false;
+    st.winner = 0;
+    st.winLine = null;
+    st.winReason = "";
+    st.phase = "playing";
   }
 }
 function finishGame(ctx, winner, reason) {

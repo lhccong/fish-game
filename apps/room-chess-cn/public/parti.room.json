@@ -1,0 +1,50 @@
+{
+  "partiVersion": "0.1.0",
+  "protocolVersion": 1,
+  "id": "room-chess-cn",
+  "name": "中国象棋",
+  "version": "0.1.0",
+  "packageMode": "filesystem",
+  "cover": "cover.jpg",
+  "entry": {
+    "ui": "index.html",
+    "worker": "room.worker.js"
+  },
+  "description": "中国象棋房间：经典模式、揭棋、残局挑战三合一。支持人机（4 档难度）与在线联机。",
+  "tags": [
+    "turn-based"
+  ],
+  "author": {
+    "name": ""
+  },
+  "actions": {
+    "joinOnline": { "payload": "可选 { gameMode }" },
+    "chooseSide": { "payload": "{ side: 'red'|'black' }" },
+    "leaveSide": { "payload": "" },
+    "setGameMode": { "payload": "{ gameMode: 'classic'|'banzhu'|'puzzle' }" },
+    "setAiLevel": { "payload": "{ level: 0|1|2|3 }" },
+    "setHostSide": { "payload": "{ side: 'red'|'black' }" },
+    "setMatchMode": { "payload": "{ matchMode: 'ai'|'online' }" },
+    "setPuzzleId": { "payload": "{ puzzleId: string }" },
+    "toggleReady": { "payload": "" },
+    "startGameOnline": { "payload": "" },
+    "startAI": { "payload": "{ gameMode, hostSide: 'red'|'black', puzzleId? }" },
+    "move": { "payload": "{ from: [r,c], to: [r,c] }" },
+    "flip": { "payload": "{ pos: [r,c] }" },
+    "resign": { "payload": "" },
+    "restart": { "payload": "" },
+    "exitRoom": { "payload": "" }
+  },
+  "room": {
+    "minPlayers": 1,
+    "maxPlayers": 2,
+    "allowSpectators": false
+  },
+  "sync": {
+    "mode": "snapshot"
+  },
+  "permissions": {
+    "network": false,
+    "storage": "session"
+  }
+}

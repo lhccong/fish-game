@@ -120,12 +120,12 @@ import './styles.css';
   }
   var sideTitle: any = $('sideTitle');
   var ruleTip: any = $('ruleTip');
-  var undoTip: any = $('undoTip');
-  var undoCountEl: any = $('undoCount');
   var undoMax = 2;
 
   var slotBlack: any = $('slotBlack');
   var slotWhite: any = $('slotWhite');
+  var undoBlackEl: any = $('undoBlack');
+  var undoWhiteEl: any = $('undoWhite');
   var playerBlackEl: any = $('playerBlack');
   var playerWhiteEl: any = $('playerWhite');
   var statusBlackEl: any = $('statusBlack');
@@ -465,9 +465,7 @@ import './styles.css';
     var finishedNow = state.finished || state.phase === 'finished';
     var localRole = myRole;
 
-    // 悔棋次数：每方独立
-    //   AI 模式：所有观战者都看得到（显示房主执方剩余）
-    //   在线模式：本方剩余
+    // 悔棋次数：每方独立（用于 canUndo 判断）
     var undoKey = mode === 'ai' ? myAiSide : (localRole === BLACK ? 'black' : (localRole === WHITE ? 'white' : 'black'));
     var myUndoRemain = (state.undoCount && state.undoCount[undoKey]) || 0;
 
@@ -476,25 +474,31 @@ import './styles.css';
     //   AI 模式：仅房主（黑方）可点，撤销两步（AI + 玩家）
     //   观战者：不可见
     var canUndo = playingNow && state.moves && state.moves.length > 0 && myUndoRemain > 0 &&
-      (mode === 'ai' ? isHost : (mode === 'online' ? (localRole && state.turn !== localRole) : true));
+      (mode === 'ai' ? isHost : (mode === 'online' ? localRole : true));
     var showUndo = (mode === 'ai' && isHost) || (mode === 'online' && localRole) || (mode === 'local');
     btnUndo.style.display = showUndo ? '' : 'none';
     btnUndo.disabled = !canUndo;
 
-    // 悔棋次数提示：
-    //   AI 模式：playing 阶段所有人都能看到（展示房主的剩余）
-    //   在线模式：双方都能看到自己的剩余
-    var showUndoTip = playingNow && (
-      mode === 'ai' ? true :
-      mode === 'online' ? !!localRole :
-      true // local
-    );
-    if (showUndoTip) {
-      undoCountEl.textContent = myUndoRemain;
-      undoTip.classList.toggle('exhausted', myUndoRemain === 0);
-      undoTip.style.display = '';
-    } else {
-      undoTip.style.display = 'none';
+    // 悔棋次数：显示在玩家槽上方（双方都可见）
+    //   AI 模式：黑/白都显示（黑=玩家, 白=AI）
+    //   在线模式：双方都显示各自的剩余
+    //   本地模式：双方都显示
+    var showUndoCount = playingNow && (mode === 'local' || mode === 'ai' || (mode === 'online' && localRole));
+    var blackUndoRemain = (state.undoCount && state.undoCount.black) || 0;
+    var whiteUndoRemain = (state.undoCount && state.undoCount.white) || 0;
+    if (undoBlackEl) {
+      undoBlackEl.style.display = showUndoCount ? '' : 'none';
+      if (showUndoCount) {
+        undoBlackEl.innerHTML = '悔棋剩余：<span class="undo-num">' + blackUndoRemain + '</span>/' + undoMax;
+        undoBlackEl.classList.toggle('exhausted', blackUndoRemain === 0);
+      }
+    }
+    if (undoWhiteEl) {
+      undoWhiteEl.style.display = showUndoCount ? '' : 'none';
+      if (showUndoCount) {
+        undoWhiteEl.innerHTML = '悔棋剩余：<span class="undo-num">' + whiteUndoRemain + '</span>/' + undoMax;
+        undoWhiteEl.classList.toggle('exhausted', whiteUndoRemain === 0);
+      }
     }
 
     // 投降：仅在线模式显示（AI 模式不需要投降按钮；观战者无角色也不显示）
@@ -874,7 +878,9 @@ import './styles.css';
       var blackIsMe = parti.playerId && parti.playerId === s.blackPlayer;
       var whiteIsMe = parti.playerId && parti.playerId === s.whitePlayer;
       myRole = blackIsMe ? BLACK : (whiteIsMe ? WHITE : 0);
-      isHost = !!(hostId && parti.playerId === hostId);
+      // AI 模式：玩家本身就是房主，不需要依赖 hostId 判定
+      // 在线模式：用 hostId 判定是否是房主
+      isHost = (s.mode === 'ai') || !!(hostId && parti.playerId === hostId);
       // 返回选择按钮：仅在 updateUI 中根据 phase/isHost 控制
       if (s.mode !== undefined && s.mode !== mode) {
         mode = s.mode;
@@ -1120,14 +1126,14 @@ import './styles.css';
           else expText = '操作';
           bannerText = '【' + expText + '】超时已自动取消';
         } else if (isFromMe) {
-          // 发起方视角：看到自己点确认/拒绝的结果
+          // 发起方视角：undo/restart/rematch 由对方响应；resign/backToMenu 由自己点确认/拒绝
           if (resType === 'resign') {
             bannerText = s.lastRequestResult.accept ? '你已投降' : '已取消投降';
           } else if (resType === 'backToMenu') {
             bannerText = s.lastRequestResult.accept ? '你已返回选择' : '已取消返回选择';
           } else {
-            // 正常不应该出现（undo/restart/rematch 对方响应），但兜底
-            bannerText = '你点击了【' + acceptText + '】';
+            var fromMeName = typeMap2[resType] || '操作';
+            bannerText = '对方已' + acceptText + '【' + fromMeName + '】';
           }
         } else {
           // 对方视角：看到发起方点了什么

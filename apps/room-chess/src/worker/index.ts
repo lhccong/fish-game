@@ -165,7 +165,12 @@ interface Move {
   r: number;
   c: number;
   color?: number;
+  // 落子之前的 turn（用于悔棋重置 turn）
+  turnBefore?: number;
+  // 围棋：被提子的位置（回退时放回原位）
   captured?: { r: number; c: number }[];
+  // pass（围棋专用）
+  pass?: boolean;
 }
 
 interface PendingRequest {
@@ -557,7 +562,7 @@ export default defineRoom<ChessState>({
 
         if (st.gameType === 'gomoku') {
           st.board[r][c] = moveColor;
-          st.moves.push({ r, c, color: moveColor });
+          st.moves.push({ r, c, color: moveColor, turnBefore: st.turn });
           st.lastMove = { r, c };
           st.turn = moveColor === BLACK ? WHITE : BLACK;
         } else {
@@ -565,7 +570,7 @@ export default defineRoom<ChessState>({
           const res = goPlaceStone(testBoard, r, c, moveColor);
           if (!res) return;
           st.board = testBoard;
-          st.moves.push({ r, c, color: moveColor, captured: res.captured });
+          st.moves.push({ r, c, color: moveColor, captured: res.captured, turnBefore: st.turn });
           st.lastMove = { r, c };
           if (moveColor === BLACK) st.capturedB += res.captured.length;
           else st.capturedW += res.captured.length;
@@ -581,7 +586,7 @@ export default defineRoom<ChessState>({
         player.id === st.whitePlayer ? WHITE : 0;
       if (!myColor || myColor !== st.turn) return;
 
-      st.moves.push({ r, c, color: st.turn });
+      st.moves.push({ r, c, color: st.turn, turnBefore: st.turn });
       if (st.gameType === 'gomoku') {
         st.board[r][c] = st.turn;
         st.lastMove = { r, c };
@@ -611,6 +616,7 @@ export default defineRoom<ChessState>({
 
         st.board = testBoard;
         st.lastMove = { r, c };
+        st.moves.push({ r, c, color: st.turn, captured: res.captured, turnBefore: st.turn });
         if (st.turn === BLACK) st.capturedB += res.captured.length;
         else st.capturedW += res.captured.length;
         st.passes = 0;
@@ -700,19 +706,15 @@ export default defineRoom<ChessState>({
       if (st.phase !== 'playing') return;
 
       if (st.mode === 'ai') {
-        const steps = st.moves.length;
-        if (steps === 0) return;
-        const last = st.moves.pop()!;
-        st.board[last.r][last.c] = EMPTY;
-        if (steps >= 2) {
-          const prev = st.moves.pop()!;
-          st.board[prev.r][prev.c] = EMPTY;
-        }
-        st.lastMove = st.moves.length ? st.moves[st.moves.length - 1] : null;
-        st.turn = BLACK;
+        // AI 模式：撤销两步（玩家 + AI），要求玩家执方剩余次数 >= 1
+        if (st.moves.length < 2) return;
+        const playerColor: number = st.hostSide === 'white' ? WHITE : BLACK;
+        const playerUndoKey: 'black' | 'white' = playerColor === BLACK ? 'black' : 'white';
         st.undoCount = st.undoCount || { black: 2, white: 2 };
-        st.undoCount.black = Math.max(0, (st.undoCount.black || 0) - 1);
-        if (st.gameType === 'go') { st.capturedB = 0; st.capturedW = 0; }
+        if ((st.undoCount[playerUndoKey] || 0) < 1) return;
+        // 回到两步之前
+        undoTo(st, st.moves.length - 2);
+        st.undoCount[playerUndoKey] = Math.max(0, (st.undoCount[playerUndoKey] || 0) - 1);
         bumpActivity(ctx);
         return;
       }
@@ -720,12 +722,22 @@ export default defineRoom<ChessState>({
       const myColor = player.id === st.blackPlayer ? BLACK :
         player.id === st.whitePlayer ? WHITE : 0;
       if (!myColor) return;
-      if (myColor === st.turn) return;
+      // "离手后立即可悔"：
+      // - 轮到我（对手刚下完）：悔 2 步，回合不变仍是我
+      // - 轮到对手（我刚下完）：悔 1 步，回合变对手
       if (st.moves.length === 0) return;
+      const myTurn = myColor === st.turn;
+      const steps = myTurn ? 2 : 1;
+      if (st.moves.length < steps) return;
+      // 悔 1 步时（我刚下完），校验最后那一步是本方下的
+      if (!myTurn) {
+        const last = st.moves[st.moves.length - 1];
+        if (last.color !== myColor) return;
+      }
       const remain = (st.undoCount && st.undoCount[myColor === BLACK ? 'black' : 'white']) || 0;
       if (remain <= 0) return;
       if (st.pendingRequest) return;
-      st.pendingRequest = { type: 'undo', from: player.id, createdAt: ctx.now() };
+      st.pendingRequest = { type: 'undo', from: player.id, createdAt: ctx.now(), steps } as any;
       ctx.broadcast('requestPending', { type: 'undo', from: player.id });
       ctx.setTimer('request-timeout', st.requestTimeoutMs, () => autoRejectRequest(ctx, 'undo'));
     },
@@ -873,6 +885,20 @@ export default defineRoom<ChessState>({
       } else if (req.type === 'rematch') {
         startMatch(ctx);
         ctx.broadcast('restarted', {});
+      } else if (req.type === 'undo') {
+        // 同意悔棋：按 req.steps 步数回退；扣除发起方的剩余次数
+        const steps = (req as any).steps || 1;
+        const targetPly = Math.max(0, st.moves.length - steps);
+        undoTo(st, targetPly);
+        const fromColor = req.from === st.blackPlayer ? BLACK :
+          req.from === st.whitePlayer ? WHITE : 0;
+        if (fromColor) {
+          const key: 'black' | 'white' = fromColor === BLACK ? 'black' : 'white';
+          st.undoCount = st.undoCount || { black: 2, white: 2 };
+          st.undoCount[key] = Math.max(0, (st.undoCount[key] || 0) - 1);
+        }
+        bumpActivity(ctx);
+        ctx.broadcast('requestAccepted', { type: 'undo', by: player.id });
       } else if (req.type === 'resign') {
         const loserColor = req.from === st.blackPlayer ? BLACK :
           req.from === st.whitePlayer ? WHITE : 0;
@@ -908,17 +934,13 @@ export default defineRoom<ChessState>({
           req.from === st.whitePlayer ? WHITE : 0;
         if (requesterColor === BLACK) st.undoCount.black = Math.max(0, (st.undoCount.black || 0) - 1);
         else if (requesterColor === WHITE) st.undoCount.white = Math.max(0, (st.undoCount.white || 0) - 1);
-        if (st.moves.length > 0) {
-          const last = st.moves.pop()!;
-          st.board[last.r][last.c] = EMPTY;
-        }
-        if (st.moves.length > 0) {
-          const prev = st.moves.pop()!;
-          st.board[prev.r][prev.c] = EMPTY;
-        }
-        st.lastMove = null;
-        st.turn = requesterColor;
-        if (st.gameType === 'go') { st.capturedB = 0; st.capturedW = 0; }
+        // 在线模式：按申请时记录的 steps 撤回
+        // - 当时轮到请求方（对手刚下完）：steps=2（对手 + 请求方上一步），回合仍为请求方
+        // - 当时轮到对手（请求方刚下完）：steps=1，回合变为对手
+        if (st.moves.length === 0) return;
+        const steps = (req as any).steps || 1;
+        if (st.moves.length < steps) return;
+        undoTo(st, st.moves.length - steps);
         bumpActivity(ctx);
       }
     },
@@ -998,6 +1020,46 @@ function tickTimeouts(ctx: Ctx) {
       const winner = loser === BLACK ? WHITE : BLACK;
       finishGame(ctx, winner, '对局超时');
     }
+  }
+}
+
+/**
+ * 悔棋：把 moves 回退到目标长度 ply。
+ * - 围棋：恢复被提的子、回退 capturedB/capturedW
+ * - 五子棋：撤销落子
+ * - 清掉 finished/winner/winLine（回到对局中）
+ */
+function undoTo(st: ChessState, ply: number): void {
+  while (st.moves.length > ply) {
+    const m = st.moves.pop();
+    if (!m) break;
+    // 把棋子放空
+    st.board[m.r][m.c] = EMPTY;
+    // 围棋：把被提的子放回
+    if (m.captured && m.captured.length) {
+      for (const cap of m.captured) {
+        // 提子原位的颜色 = 当前落子方的对方
+        const capColor = m.color === BLACK ? WHITE : BLACK;
+        st.board[cap.r][cap.c] = capColor;
+        if (m.color === BLACK) st.capturedB = Math.max(0, st.capturedB - 1);
+        else st.capturedW = Math.max(0, st.capturedW - 1);
+      }
+    }
+    if (typeof m.turnBefore === 'number') {
+      st.turn = m.turnBefore;
+    }
+  }
+  // 重算 lastMove
+  st.lastMove = st.moves.length
+    ? { r: st.moves[st.moves.length - 1].r, c: st.moves[st.moves.length - 1].c }
+    : null;
+  // 清掉已结束/胜负/胜负线，回到对局中
+  if (st.finished || st.winner !== 0 || st.winLine) {
+    st.finished = false;
+    st.winner = 0;
+    st.winLine = null;
+    st.winReason = '';
+    st.phase = 'playing';
   }
 }
 

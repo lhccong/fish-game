@@ -159,6 +159,17 @@
       color: #888
     }
 
+    .slot-undo {
+      font-size: 10px;
+      color: #b04848;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+    .slot-undo.exhausted {
+      color: #bbb;
+      text-decoration: line-through;
+    }
+
     /* 统计 */
     .stat-row {
       display: flex;
@@ -224,19 +235,6 @@
       padding: 8px 10px;
       background: #efe9dd;
       border-radius: 8px
-    }
-
-    /* 悔棋次数提示 */
-    #undoTip {
-      font-size: 12px;
-      color: #7a6a52;
-      padding: 6px 10px;
-      background: #f7f1e3;
-      border-radius: 8px;
-      text-align: center;
-    }
-    #undoTip.exhausted {
-      color: #b04848;
     }
 
     /* ===== 棋盘区域 ===== */

@@ -18,10 +18,12 @@
       <!-- 玩家槽（从一开始就同步显示角色） -->
       <div class="player-slot-row">
         <div class="player-slot empty" id="slotBlack">
+          <div class="slot-undo" id="undoBlack" style="display:none">悔棋剩余：<span class="undo-num">2</span>/2</div>
           <div class="slot-name empty" id="playerBlack">● 黑方 <span class="name-text">等待加入…</span></div>
           <div class="slot-status waiting" id="statusBlack"></div>
         </div>
         <div class="player-slot empty" id="slotWhite">
+          <div class="slot-undo" id="undoWhite" style="display:none">悔棋剩余：<span class="undo-num">2</span>/2</div>
           <div class="slot-name empty" id="playerWhite">○ 白方 <span class="name-text">等待加入…</span></div>
           <div class="slot-status waiting" id="statusWhite"></div>
         </div>
@@ -37,9 +39,6 @@
 
       <!-- 规则提示 -->
       <div id="ruleTip"></div>
-
-      <!-- 悔棋次数提示 -->
-      <div id="undoTip" style="display:none">悔棋剩余：<span id="undoCount">2</span>/2</div>
 
       <!-- 底部按钮：根据对局阶段动态切换 -->
       <div id="bottomBtns">
@@ -78,8 +77,8 @@
 
     <!-- 模式选择面板（全屏覆盖，顶部显示） -->
     <div id="modePanel">
-      <h1>弈 合</h1>
-      <div class="sub">五子棋 · 围棋 · 二合一</div>
+      <h1>五子棋 · 围棋 · 二合一</h1>  
+      <div class="sub">让 AI 成为你的围棋老师</div>
 
       <div class="section-label">选择棋种</div>
       <div class="opt-group" id="gameGroup">

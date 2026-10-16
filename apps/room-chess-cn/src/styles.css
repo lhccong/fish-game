@@ -1,0 +1,658 @@
+/* 与 room-chess 共用同一套设计系统（米色/木质 + 圆角 + 卡片）。 */
+/* 仅在 ID 与棋盘尺寸/颜色上做象棋适配。 */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f0ece4;
+  color: #3d3429;
+}
+
+#app {
+  display: flex;
+  height: 100%;
+  position: relative;
+}
+
+/* ===== 侧边栏 ===== */
+#sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: #f7f4ee;
+  border-right: 1px solid #e0d8c8;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+#sidebar h2 {
+  font-size: 14px;
+  letter-spacing: 3px;
+  color: #5a4f3e;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 2px;
+}
+
+/* 玩家槽 */
+.player-slot-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.player-slot {
+  flex: 1;
+  padding: 12px 10px;
+  border-radius: 10px;
+  border: 2px solid #ddd4c4;
+  background: #fff;
+  text-align: center;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+}
+
+.player-slot.empty {
+  border-style: dashed;
+  background: #f7f4ee;
+}
+
+.player-slot.ready {
+  border-color: #5a8a4a;
+  background: #eef5e8;
+}
+
+.player-slot.ai {
+  border-color: #c9bfa9;
+  background: #faf7f0;
+}
+
+.player-slot.ai .name-text {
+  font-style: italic;
+  color: #9b8e7b;
+}
+
+.player-slot.me {
+  border-color: #5a4f3e;
+  background: #fffef8;
+  box-shadow: 0 0 0 3px rgba(90, 79, 62, 0.2), 0 2px 8px rgba(90, 79, 62, 0.15);
+}
+
+.player-slot.me::before {
+  content: '你';
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  background: #5a4f3e;
+  color: #f0ece4;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+
+.slot-role {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #9b8e7b;
+  line-height: 1.3;
+}
+
+.slot-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3d3429;
+  min-height: 20px;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.slot-name.empty {
+  color: #bbb;
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.slot-name .name-text {
+  font-weight: 600;
+  color: #3d3429;
+}
+
+.slot-name.empty .name-text {
+  color: #bbb;
+  font-weight: 400;
+}
+
+.slot-status {
+  font-size: 11px;
+  letter-spacing: 1px;
+  min-height: 14px;
+  line-height: 1.3;
+}
+
+.slot-status.ok {
+  color: #3a7a3a;
+  font-weight: 700;
+}
+
+.slot-status.waiting {
+  color: #bbb;
+}
+
+.slot-status.ai {
+  color: #888;
+}
+
+.slot-undo {
+  font-size: 10px;
+  color: #b04848;
+  margin-top: 4px;
+  letter-spacing: 0.5px;
+}
+.slot-undo.exhausted {
+  color: #bbb;
+  text-decoration: line-through;
+}
+
+/* 统计 */
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid #ece5d8;
+}
+
+.stat-row .label {
+  color: #9b8e7b;
+}
+
+.stat-row .val {
+  font-weight: 600;
+  color: #5a4f3e;
+}
+
+.stat-red {
+  color: #b04848 !important;
+}
+
+.stat-black {
+  color: #1a1a1a !important;
+}
+
+/* 底部按钮 */
+#bottomBtns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid #ece5d8;
+  padding-top: 10px;
+  margin-top: auto;
+}
+
+.side-btn {
+  padding: 9px 0;
+  border-radius: 8px;
+  border: 1px solid #ddd4c4;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  letter-spacing: 2px;
+  color: #5a4f3e;
+  transition: all 0.15s;
+}
+
+.side-btn:active {
+  background: #ece5d8;
+}
+
+.side-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 规则提示 */
+#ruleTip {
+  font-size: 11px;
+  color: #a09480;
+  line-height: 1.7;
+  padding: 8px 10px;
+  background: #efe9dd;
+  border-radius: 8px;
+}
+
+/* ===== 棋盘区域 ===== */
+#boardWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 16px;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  border-radius: 6px;
+  box-shadow: 0 4px 24px rgba(60, 40, 10, 0.15);
+  transition: width 0.3s, height 0.3s;
+  touch-action: manipulation;
+}
+
+#turnIndicator {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: #7a6e5c;
+  background: rgba(247, 244, 238, 0.9);
+  padding: 6px 20px;
+  border-radius: 20px;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+#turnIndicator.hide {
+  opacity: 0;
+}
+
+#winBanner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  letter-spacing: 6px;
+  color: #5a4f3e;
+  background: rgba(247, 244, 238, 0.95);
+  padding: 24px 48px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(60, 40, 10, 0.2);
+  display: none;
+  text-align: center;
+  z-index: 10;
+}
+
+#winBanner.show {
+  display: block;
+}
+
+#winBanner small {
+  display: block;
+  font-size: 12px;
+  color: #a09480;
+  margin-top: 10px;
+  letter-spacing: 2px;
+}
+
+#requestBanner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(247, 244, 238, 0.96);
+  padding: 24px 32px;
+  border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  display: none;
+  z-index: 30;
+  text-align: center;
+  min-width: 240px;
+}
+
+#requestBanner.show {
+  display: block;
+}
+
+#requestTimer {
+  font-size: 13px;
+  color: #b04848;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+#toast {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(58, 48, 36, 0.92);
+  color: #f0ece4;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+#toast.show {
+  opacity: 1;
+}
+
+#requestText {
+  font-size: 16px;
+  color: #3d3429;
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+}
+
+.req-btns {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.req-btn {
+  padding: 8px 24px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+
+.req-btn.accept {
+  background: #6b8e4e;
+  color: #fff;
+}
+
+.req-btn.reject {
+  background: #c0392b;
+  color: #fff;
+}
+
+.req-ack {
+  display: flex;
+  justify-content: center;
+}
+
+/* ===== 中央模式选择面板 ===== */
+#modePanel {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: rgba(247, 244, 238, 0.97);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  transition: opacity 0.35s;
+  overflow-y: auto;
+}
+
+#modePanel.hide {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#modePanel h1 {
+  font-size: 26px;
+  letter-spacing: 6px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #4a3f30;
+}
+
+#modePanel .sub {
+  font-size: 12px;
+  color: #9b8e7b;
+  margin-bottom: 24px;
+  letter-spacing: 2px;
+}
+
+.section-label {
+  font-size: 11px;
+  color: #a09480;
+  margin-bottom: 6px;
+  letter-spacing: 3px;
+}
+
+.opt-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.opt-btn {
+  padding: 10px 24px;
+  border-radius: 10px;
+  border: 1.5px solid #c8bca8;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #5a4f3e;
+  letter-spacing: 1px;
+}
+
+.opt-btn.active {
+  border-color: #5a4f3e;
+  background: #5a4f3e;
+  color: #f0ece4;
+}
+
+.opt-btn:active {
+  transform: scale(0.96);
+}
+
+#aiLevelGroup {
+  display: none;
+  margin-bottom: 14px;
+}
+#aiLevelGroup.show {
+  display: flex;
+}
+
+#sideGroup {
+  display: none;
+  margin-bottom: 14px;
+}
+#sideGroup.show {
+  display: flex;
+}
+
+#puzzleGroup {
+  display: none;
+  margin-bottom: 14px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+#puzzleGroup.show {
+  display: flex;
+}
+
+#puzzleList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 540px;
+}
+.puzzle-item {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #c8bca8;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  color: #5a4f3e;
+}
+.puzzle-item.active {
+  border-color: #5a4f3e;
+  background: #5a4f3e;
+  color: #f0ece4;
+}
+
+#onlineLobby {
+  margin-bottom: 18px;
+}
+#onlineLobby .player-slot-row {
+  margin-bottom: 14px;
+}
+#onlineLobby.hide {
+  display: none;
+}
+
+#onlineLobby .player-slot.empty {
+  cursor: pointer;
+}
+#onlineLobby .player-slot.empty:hover {
+  border-color: #5a4f3e;
+  background: #efe9dd;
+}
+#onlineLobby .player-slot.me {
+  cursor: pointer;
+}
+
+#onlineReadyBtn {
+  width: 100%;
+  padding: 11px 0;
+  border-radius: 10px;
+  border: none;
+  background: #5a4f3e;
+  color: #f0ece4;
+  font-size: 14px;
+  letter-spacing: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+#onlineReadyBtn:active {
+  transform: scale(0.98);
+}
+#onlineReadyBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+#onlineReadyBtn.cancel {
+  background: #a09480;
+}
+
+#startBtn {
+  width: auto;
+  min-width: 200px;
+  margin: 8px auto 0;
+  display: block;
+  padding: 12px 28px;
+  border-radius: 10px;
+  border: none;
+  background: #5a4f3e;
+  color: #f0ece4;
+  font-size: 16px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+#startBtn.green {
+  background: #3a7a3a;
+}
+#startBtn:active {
+  transform: scale(0.96);
+}
+#startBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 残局面里的"步数"提示 */
+#puzzleStepBar {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: #7a6e5c;
+  background: rgba(247, 244, 238, 0.9);
+  padding: 5px 14px;
+  border-radius: 16px;
+  letter-spacing: 2px;
+  pointer-events: none;
+}
+#puzzleStepBar.exceeded {
+  color: #b04848;
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  #app {
+    flex-direction: column;
+  }
+  #sidebar {
+    width: 100%;
+    min-width: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    gap: 8px;
+    border-right: none;
+    border-bottom: 1px solid #e0d8c8;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  #sidebar h2 {
+    width: 100%;
+    font-size: 13px;
+    text-align: left;
+  }
+  .player-slot-row {
+    width: 100%;
+  }
+  #bottomBtns {
+    flex-direction: row;
+    width: 100%;
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+  }
+  .side-btn {
+    flex: 1;
+    padding: 8px 0;
+    font-size: 12px;
+  }
+  #boardWrap {
+    padding: 8px;
+  }
+  .stat-row {
+    font-size: 11px;
+  }
+  #modePanel {
+    padding: 16px;
+  }
+  #modePanel h1 {
+    font-size: 22px;
+  }
+  .opt-btn {
+    padding: 9px 18px;
+    font-size: 13px;
+  }
+  #startBtn {
+    padding: 10px 22px;
+    font-size: 15px;
+  }
+}
