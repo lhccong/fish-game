@@ -1,7 +1,7 @@
 {
   "partiVersion": "0.1.0",
   "protocolVersion": 1,
-  "id": "moyu-gomoku-go",
+  "id": "room-chess",
   "name": "五子棋与围棋",
   "version": "0.1.0",
   "packageMode": "filesystem",
@@ -15,7 +15,7 @@
     "turn-based"
   ],
   "author": {
-    "name": "弈合"
+    "name": ""
   },
   "actions": {
     "joinOnline": {
